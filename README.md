@@ -10,6 +10,11 @@ All features are customizeable and can be tweaked via optional settings. However
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
 
+## Installation
+1. For the newest, bleeding edge version, download [source_engine_collision_tools.py](https://github.com/theanine3D/source-engine-collision-tools/raw/main/source_engine_collision_tools.py) (right click this link and Save As...) If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
+2. Go into Blender's addon preferences (File → Preferences → Addons)
+3. Click the "Install..." button and browse to source_engine_collision_tools.py, select it, and press "Install Add-on"
+
 ## Previews ##
 ### Interface ###
 ![image](https://user-images.githubusercontent.com/88953117/212564755-c0404799-dbf9-42b5-9961-1b0d2579c7d6.png)
