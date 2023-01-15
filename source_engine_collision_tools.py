@@ -8,32 +8,37 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (0, 1),
+    "version": (0, 2),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
     "support": "COMMUNITY"
 }
 
-
 # PROPERTY DEFINITIONS
 
 class SrcEngCollProperties(bpy.types.PropertyGroup):
-    QC_Folder: bpy.props.StringProperty(
-        name="QC Folder", description="Full path of the folder in which to save the generated QCs", default="", maxlen=1024)
     Decimate_Ratio: bpy.props.FloatProperty(
-        name="Decimate Ratio", subtype="FACTOR", description="A lower ratio will result in a less accurate (but more performant) collision mesh. Leave this at 1.0 if you don't want to decimate at all", max=1.0, min=0.0, default=0.5)
+        name="Decimate Ratio", subtype="FACTOR", description="At 1.0, decimation is disabled. Lower value = stronger decimation, resulting in less accurate but more performant collision mesh. Note: Decimation reduces effectiveness of Merge Adjacent Similars", max=1.0, min=0.0, default=1)
     Extrusion_Modifier: bpy.props.FloatProperty(
-        name="Extrude Factor", subtype="FACTOR", description="The setting affects the extrusion of each hull. Default will work in most cases", min=0.01, max=10.0, default=1.0)
+        name="Extrude Factor", subtype="FACTOR", description="The setting affects the extrusion of each hull. Default will work in most cases", min=0.01, max=20.0, default=1.0)
     Scale_Modifier: bpy.props.IntProperty(
-        name="Scale Factor", description="Default will work in most cases. If you see chunks of geometry missing from the generated collision model, try setting this to something lower", min=-5, max=5, default=0)
+        name="Scale Modifier", description="Default will work in most cases. If you see chunks of geometry missing from the generated collision model, try setting this to something lower", min=-5, max=5, default=0)
     Similar_Factor: bpy.props.FloatProperty(
-        name="Similar Factor", subtype="FACTOR", description="Intensity setting for Merge Adjacent Similars. A higher factor will result in more hulls merging together, but at the cost of accuracy", min=0.01, max=1.0, default=0.25)
+        name="Similar Factor", subtype="FACTOR", description="Similarity intensity for Merge Adjacent Similars. A higher factor will result in more hulls merging together, but at the cost of accuracy", min=0.01, max=1.0, default=0.5)
+    Distance_Modifier: bpy.props.IntProperty(
+        name="Distance Modifier", description="Affects the distance at which hulls can be merged. Default will work in most cases. A higher number will result in more hulls merging together, but at the cost of accuracy", min=-5, max=5, default=0)
     Thin_Threshold: bpy.props.FloatProperty(
         name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.001, max=.5, default=.1)
     Thin_Linked: bpy.props.BoolProperty(
         name="Affect Linked", description="If enabled, any faces that are linked/connected to the thin faces will also be removed. Leave enabled if you're trying to clean up an existing collision model. Only disable this setting if you want to use Remove Thin Faces on the original non-collision model prior to actually generating the collision.", default=True)
-
+    QC_Folder: bpy.props.StringProperty(
+        name="QC Folder", subtype="DIR_PATH", description="Full path of the folder in which to save the generated QCs", default="//export//phys//", maxlen=1024)
+    QC_Src_Models_Dir: bpy.props.StringProperty(
+        name="Models Path", subtype="DIR_PATH", description="Path of the folder where your compiled models are stored in the Source Engine game directory (ie. the path in $modelname, but without the model name)", default="mymodels\\", maxlen=1024)
+    QC_Src_Mats_Dir: bpy.props.StringProperty(
+        name="Materials Path", subtype="DIR_PATH", description="Path of the folder where your VMT and VTF files are stored in the Source Engine game directory (ie. the $cdmaterials path)", default="models\mymodels\\", maxlen=1024)
+        
 # FUNCTION DEFINITIONS
 
 def display_msg_box(message="", title="Info", icon='INFO'):
@@ -42,7 +47,9 @@ def display_msg_box(message="", title="Info", icon='INFO'):
     ''' display_msg_box("This is a message", "This is a custom title", "ERROR") '''
 
     def draw(self, context):
-        self.layout.label(text=message)
+        lines = message.split("\n")
+        for line in lines:
+            self.layout.label(text=line)
 
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
@@ -69,11 +76,61 @@ def check_for_selected(verbose=True):
                 "One mesh object must be selected and set as active", "Error", "ERROR")
         return False
 
+def get_avg_area(obj):
+    faces = obj.data.polygons
+    cumulative_area = 0
+
+    for f in faces:
+        cumulative_area += f.area
+    
+    average_area = cumulative_area / len(faces)
+    return average_area
+
+def generate_SMD_lines():
+    empty_SMD_lines = list()
+    empty_SMD_lines.append("version 1\n")
+    empty_SMD_lines.append("nodes\n")
+    empty_SMD_lines.append('0 "root" -1\n')
+    empty_SMD_lines.append("end\n")
+    empty_SMD_lines.append("skeleton\n")
+    empty_SMD_lines.append("time 0\n")
+    empty_SMD_lines.append("0 0 0 0 0 0 0\n")
+    empty_SMD_lines.append("end\n")
+    empty_SMD_lines.append("triangles\n")
+    empty_SMD_lines.append("phys\n")
+    empty_SMD_lines.append("0  -0.000000 -0.000000 0.000000  0.000000 0.000000 1.000000  0.000000 0.000000 0\n")
+    empty_SMD_lines.append("0  0.000000 -0.000000 0.000000  0.000000 0.000000 1.000000  1.000000 0.000000 0\n")
+    empty_SMD_lines.append("0  0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  0.500000 0.500000 0\n")
+    empty_SMD_lines.append("phys\n")
+    empty_SMD_lines.append("0  0.000000 -0.000000 0.000000  0.000000 0.000000 1.000000  1.000000 0.000000 0\n")
+    empty_SMD_lines.append("0  0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  1.000000 1.000000 0\n")
+    empty_SMD_lines.append("0  0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  0.500000 0.500000 0\n")
+    empty_SMD_lines.append("phys\n")
+    empty_SMD_lines.append("0  0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  1.000000 1.000000 0\n")
+    empty_SMD_lines.append("0  -0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  0.000000 1.000000 0\n")
+    empty_SMD_lines.append("0  0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  0.500000 0.500000 0\n")
+    empty_SMD_lines.append("phys\n")
+    empty_SMD_lines.append("0  -0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  0.000000 1.000000 0\n")
+    empty_SMD_lines.append("0  -0.000000 -0.000000 0.000000  0.000000 0.000000 1.000000  0.000000 0.000000 0\n")
+    empty_SMD_lines.append("0  0.000000 0.000000 0.000000  0.000000 0.000000 1.000000  0.500000 0.500000 0\n")
+    empty_SMD_lines.append("end\n")
+    return empty_SMD_lines
+
+def generate_QC_lines(obj, qc_dir, models_dir, mats_dir):
+    QC_template = list()
+    QC_template.append(f'$modelname "{models_dir}{obj.name}.mdl"\n')
+    QC_template.append(f'$body {obj.name} "Empty.smd"\n')
+    QC_template.append('$surfaceprop default\n')
+    QC_template.append(f'$cdmaterials "{mats_dir}"\n')
+    QC_template.append('$sequence ref "Empty.smd"\n')
+    QC_template.append(f'$collisionmodel "{obj.name}.smd"'+' {$concave}\n')
+    return QC_template
+
 # Generate Collision Mesh operator
 
 class GenerateSrcCollision(bpy.types.Operator):
     """Generate a Source Engine-compliant collision model based on the current active object. The original object will be temporarily hidden, but not modified otherwise"""
-    bl_idname = "object.gen_src_collision"
+    bl_idname = "object.src_eng_collision"
     bl_label = "Generate Collision Mesh"
     bl_options = {'REGISTER'}
 
@@ -123,6 +180,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
             bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.mark_sharp(clear=True)
             bpy.ops.mesh.remove_doubles(threshold=doubles_threshold)
             bpy.ops.mesh.tris_convert_to_quads(seam=True,sharp=True,materials=True)
 
@@ -144,7 +202,6 @@ class GenerateSrcCollision(bpy.types.Operator):
             # Move the extruded faces inward 
             bpy.context.scene.tool_settings.transform_pivot_point = 'INDIVIDUAL_ORIGINS'
             bpy.ops.transform.shrink_fatten(value=(extrude_factor), use_even_offset=False, mirror=True, use_proportional_edit=False, snap=False)
-            bpy.ops.mesh.edge_collapse()
             bpy.ops.mesh.select_all(action='SELECT')
             
             bpy.ops.mesh.normals_make_consistent(inside=False)
@@ -212,7 +269,7 @@ class GenerateSrcCollision(bpy.types.Operator):
 
 class SplitUpSrcCollision(bpy.types.Operator):
     """Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls"""
-    bl_idname = "object.gen_src_split"
+    bl_idname = "object.src_eng_split"
     bl_label = "Split Up Collision Mesh"
     bl_options = {'REGISTER'}
 
@@ -300,7 +357,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
 class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
     """Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a less accurate, but more performant model. If original model was already low-poly to begin with, you probably won't need this"""
-    bl_idname = "object.gen_src_cleanup_merge_similars"
+    bl_idname = "object.src_eng_cleanup_merge_similars"
     bl_label = "Merge Adjacent Similars"
     bl_options = {'REGISTER'}
 
@@ -311,7 +368,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 obj_parts = set()
                 original_dimensions = obj.dimensions
                 longest_dim = float(max(original_dimensions))
-                doubles_threshold = 0.14999999999999999769 * (1.00080240446594588574 ** longest_dim)
+                doubles_threshold = 0.14999999999999999769 * (1.00080240446594588574 ** longest_dim) * (2^bpy.context.scene.SrcEngCollProperties.Distance_Modifier)
                 # Similar threshold is set by user - but just in case, exponential formula here for documentation purposes
                 # similarity_threshold = 0.90019867306982895535 * (0.99988964434256221495 ** longest_dim)
 
@@ -410,7 +467,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
 class Cleanup_RemoveThinFaces(bpy.types.Operator):
     """Removes any polygons that are smaller than the average face area in the model. Thin Threshold sets just how much smaller each face must be for it to be deleted. WARNING: Can't undo this"""
-    bl_idname = "object.gen_src_cleanup_remove_thin_faces"
+    bl_idname = "object.src_eng_cleanup_remove_thin_faces"
     bl_label = "Remove Thin Faces"
     bl_options = {'REGISTER'}
 
@@ -453,14 +510,49 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
 
 class GenerateSourceQC(bpy.types.Operator):
     """Generate QC files used by Source Engine to compile the collision model(s) in the currently active collection"""
-    bl_idname = "object.gen_src_qc"
+    bl_idname = "object.src_eng_qc"
     bl_label = "Generate Source Engine QC"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
         
-        display_msg_box(
-                    "This function is not yet implemented. Keep an eye on the GitHub repo for updates", "Error", "ERROR")
+        if check_for_selected() == True:
+            QC_folder = bpy.path.abspath(bpy.context.scene.SrcEngCollProperties.QC_Folder)
+            models_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir
+            mats_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir
+            dirs = [bpy.context.scene.SrcEngCollProperties.QC_Folder, models_dir, mats_dir]
+
+            # Check for trailing slashes
+            for dir in dirs:
+                if not dir.endswith("\\") and not dir.endswith("/"):
+                    display_msg_box("One of your specified QC directories is missing a trailing slash (\\ or /) at the end.\nAdd one first and then try again", "Error", "ERROR")
+                    return {'FINISHED'}
+           
+           # Get the Collision Models collection
+            root_collection = None
+            if 'Collision Models' in bpy.data.collections.keys():
+                if len(bpy.data.collections["Collision Models"].all_objects) > 0:
+                    root_collection = bpy.data.collections['Collision Models']
+                else:
+                    display_msg_box("There are no collision models in the 'Collision Models' collection. Place your collision models there first", "Error", "ERROR")
+            else:
+                display_msg_box("There is no 'Collision Models' collection. Please create one with that exact name, and then place your collision models inside it", "Error", "ERROR")
+            if root_collection == None:
+                return {'FINISHED'}
+
+            # Get list of all objects in the Collision Models collection
+            objs = [obj for obj in root_collection.all_objects]
+
+            # Generate QC file for every object
+            for obj in objs:
+                with open(f"{QC_folder}{obj.name}.qc", 'w') as qc_file:
+                    qc_file.writelines(generate_QC_lines(obj, QC_folder, models_dir, mats_dir))
+
+            # Generate empty placeholder SMD
+            with open(QC_folder + "Empty.smd", 'w') as empty_smd_file:
+                empty_smd_file.writelines(generate_SMD_lines())
+
+            display_msg_box("QC files generated successfully in " + QC_folder + "\n\nYou will still need to export your collision models as SMD through other means (ie. Blender Source Tools or SourceOps)", "Info", "INFO")
 
         return {'FINISHED'}
 
@@ -514,34 +606,43 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Extrusion_Modifier")
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Scale_Modifier")
 
-        row3.operator("object.gen_src_collision")
-        row4.operator("object.gen_src_split")
+        row3.operator("object.src_eng_collision")
+        row4.operator("object.src_eng_split")
 
         # Cleanup UI
         boxCleanup = row5.box()
         boxCleanup.label(text="Clean Up Tools")
+        rowCleanup1_Label = boxCleanup.row()
         rowCleanup1 = boxCleanup.row()
-        boxCleanup.separator()
         rowCleanup2 = boxCleanup.row()
+        rowCleanup3_Label = boxCleanup.row()
         rowCleanup3 = boxCleanup.row()
+        rowCleanup4 = boxCleanup.row()
 
+        rowCleanup1_Label.label(text="Similarity")
         rowCleanup1.prop(bpy.context.scene.SrcEngCollProperties, "Similar_Factor")
-        rowCleanup1.operator("object.gen_src_cleanup_merge_similars")
+        rowCleanup1.prop(bpy.context.scene.SrcEngCollProperties, "Distance_Modifier")
+        rowCleanup2.operator("object.src_eng_cleanup_merge_similars")
 
-        rowCleanup2.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Threshold")
-        rowCleanup2.operator("object.gen_src_cleanup_remove_thin_faces")
-
+        rowCleanup3_Label.label(text="Thinness")
+        rowCleanup3.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Threshold")
         rowCleanup3.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Linked")
+        rowCleanup4.operator("object.src_eng_cleanup_remove_thin_faces")
+
 
         # Compile / QC UI
         boxQC = row6.box()
         boxQC.label(text="Compile Tools")
         rowQC1 = boxQC.row()
         rowQC2 = boxQC.row()
+        rowQC3 = boxQC.row()
+        rowQC4 = boxQC.row()
 
         rowQC1.prop(bpy.context.scene.SrcEngCollProperties, "QC_Folder")
-        rowQC2.enabled = len(bpy.context.scene.SrcEngCollProperties.QC_Folder) > 0
-        rowQC2.operator("object.gen_src_qc")
+        rowQC2.prop(bpy.context.scene.SrcEngCollProperties, "QC_Src_Models_Dir")
+        rowQC3.prop(bpy.context.scene.SrcEngCollProperties, "QC_Src_Mats_Dir")
+        rowQC4.enabled = len(bpy.context.scene.SrcEngCollProperties.QC_Folder) > 0 and len(bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir) > 0 and len(bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir) > 0
+        rowQC4.operator("object.src_eng_qc")
 
 
 # End of classes
