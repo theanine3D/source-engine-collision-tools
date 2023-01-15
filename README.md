@@ -6,7 +6,7 @@ All features are customizeable and can be tweaked via optional settings. However
 - **Generate Collision Mesh** - Generate a Source Engine-compliant collision model based on the current active object.
   - Supports (optional) decimation, to automatically reduce the complexity of the resulting collision model
 - **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
-- **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a less accurate, but more performant model.
+- **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model.
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
 
 ## Planned Features ##
