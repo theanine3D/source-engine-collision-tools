@@ -10,7 +10,7 @@ All features are customizeable and can be tweaked via optional settings. However
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
 
 ## Planned Features ##
-- **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. Crowbar)
+- **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
 
 ## Previews ##
 ### Interface ###
