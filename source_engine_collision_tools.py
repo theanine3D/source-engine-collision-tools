@@ -534,20 +534,28 @@ class Cleanup_ForceConvex(bpy.types.Operator):
                 bpy.ops.mesh.select_non_manifold()
                 bpy.ops.mesh.select_linked(delimit=set())
                 bpy.ops.mesh.delete(type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
                 bpy.ops.object.mode_set(mode='OBJECT')
                 bpy.ops.object.shade_smooth()
 
                 faces = work_obj.data.polygons
+                i = len(faces)-1
 
-                for i in range(len(faces)):
+                while i >= 0:
+
+                    # Deselect everything first
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_all(action='DESELECT')
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
                     try:
-                        # Isolate similar and adjacent geometry in the copy
-                        bpy.ops.object.mode_set(mode='EDIT')
-                        bpy.ops.mesh.select_all(action='DESELECT')
-                        bpy.ops.object.mode_set(mode='OBJECT')
                         faces[i].select = True
+                    except:
+                        break
+                    else:
+                        # Select the entire hull
                         bpy.ops.object.mode_set(mode='EDIT')
-                        bpy.ops.mesh.select_mode(type='VERT')
+                        bpy.ops.mesh.select_mode(type='FACE')
                         bpy.ops.mesh.select_linked(delimit=set())
 
                         # Force convex
@@ -558,8 +566,7 @@ class Cleanup_ForceConvex(bpy.types.Operator):
                         bpy.ops.mesh.convex_hull(join_triangles=False)
                         bpy.ops.mesh.select_all(action='DESELECT')
                         bpy.ops.object.mode_set(mode='OBJECT')
-                    except:
-                        break
+                        i -= 1
             
                 # Apply final transforms
                 bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
