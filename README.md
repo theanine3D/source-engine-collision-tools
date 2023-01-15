@@ -13,7 +13,7 @@ All features are customizeable and can be tweaked via optional settings. However
 ## Installation
 1. For the newest, bleeding edge version, download [source_engine_collision_tools.py](https://github.com/theanine3D/source-engine-collision-tools/raw/main/source_engine_collision_tools.py) (right click this link and Save As...) If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
 2. Go into Blender's addon preferences (File → Preferences → Addons)
-3. Click the "Install..." button and browse to source_engine_collision_tools.py, select it, and press "Install Add-on"
+3. Click the "Install..." button and browse to source_engine_collision_tools.py, select it, and press "Install Add-on" (The PY file is installed directly, without a ZIP file)
 
 ## Previews ##
 ### Interface ###
