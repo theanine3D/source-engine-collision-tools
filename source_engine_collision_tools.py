@@ -353,6 +353,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
         return {'FINISHED'}
 
+
 # Merge Adjacent Similars operator
 
 class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
@@ -424,6 +425,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                         bpy.ops.mesh.convex_hull(join_triangles=False)
                         bpy.ops.mesh.dissolve_limited() # angle_limit = 0.174533 is same as '10 degrees'
                         bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+                        bpy.ops.mesh.convex_hull(join_triangles=False)
 
                         # Join and store the merged hulls, so we can rejoin all merged pieces later
                         bpy.ops.object.mode_set(mode='OBJECT')
@@ -506,6 +508,64 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
 
         return {'FINISHED'}
 
+# Force Convex operator
+
+class Cleanup_ForceConvex(bpy.types.Operator):
+    """Forces all existing hulls in the selected object to be convex. Warning: Any non-manifold geometry will be removed by this operation"""
+    bl_idname = "object.src_eng_cleanup_force_convex"
+    bl_label = "Force Convex"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        if check_for_selected() == True:
+                
+                work_obj = bpy.context.active_object
+
+                # Make sure no faces are selected
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(type='FACE')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+                # Remove non-manifolds first
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_non_manifold()
+                bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.delete(type='VERT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.shade_smooth()
+
+                faces = work_obj.data.polygons
+
+                for i in range(len(faces)):
+                    try:
+                        # Isolate similar and adjacent geometry in the copy
+                        bpy.ops.object.mode_set(mode='EDIT')
+                        bpy.ops.mesh.select_all(action='DESELECT')
+                        bpy.ops.object.mode_set(mode='OBJECT')
+                        faces[i].select = True
+                        bpy.ops.object.mode_set(mode='EDIT')
+                        bpy.ops.mesh.select_mode(type='VERT')
+                        bpy.ops.mesh.select_linked(delimit=set())
+
+                        # Force convex
+                        bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+                        bpy.ops.mesh.convex_hull(join_triangles=False)
+                        bpy.ops.mesh.dissolve_limited() # angle_limit = 0.174533 is same as '10 degrees'
+                        bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+                        bpy.ops.mesh.convex_hull(join_triangles=False)
+                        bpy.ops.mesh.select_all(action='DESELECT')
+                        bpy.ops.object.mode_set(mode='OBJECT')
+                    except:
+                        break
+            
+                # Apply final transforms
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+        return {'FINISHED'}
+
 # Generate Source Engine QC
 
 class GenerateSourceQC(bpy.types.Operator):
@@ -563,7 +623,8 @@ ops = (
     SplitUpSrcCollision,
     GenerateSourceQC,
     Cleanup_MergeAdjacentSimilars,
-    Cleanup_RemoveThinFaces
+    Cleanup_RemoveThinFaces,
+    Cleanup_ForceConvex
 )
 
 def menu_func(self, context):
@@ -618,6 +679,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup3_Label = boxCleanup.row()
         rowCleanup3 = boxCleanup.row()
         rowCleanup4 = boxCleanup.row()
+        rowCleanup5_Label = boxCleanup.row()
+        rowCleanup5 = boxCleanup.row()
 
         rowCleanup1_Label.label(text="Similarity")
         rowCleanup1.prop(bpy.context.scene.SrcEngCollProperties, "Similar_Factor")
@@ -629,6 +692,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup3.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Linked")
         rowCleanup4.operator("object.src_eng_cleanup_remove_thin_faces")
 
+        rowCleanup5_Label.label(text="Other")
+        rowCleanup5.operator("object.src_eng_cleanup_force_convex")
 
         # Compile / QC UI
         boxQC = row6.box()
@@ -654,7 +719,8 @@ classes = (
     SplitUpSrcCollision,
     GenerateSourceQC,
     Cleanup_MergeAdjacentSimilars,
-    Cleanup_RemoveThinFaces
+    Cleanup_RemoveThinFaces,
+    Cleanup_ForceConvex
 )
 
 def register():
