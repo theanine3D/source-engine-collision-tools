@@ -8,8 +8,6 @@ All features are customizeable and can be tweaked via optional settings. However
 - **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model.
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
-
-## Planned Features ##
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
 
 ## Previews ##
