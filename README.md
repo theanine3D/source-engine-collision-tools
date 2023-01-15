@@ -1,5 +1,5 @@
 # Source Engine Collision Tools
-Blender (3.0+) addon for generating and optimizing collision models for use in Source Engine.
+Blender (3.0+) addon for generating and optimizing collision models for use in Source Engine. Best combined with [Blender Source Tools](http://steamreview.org/BlenderSourceTools/).
 
 ## Features
 All features are customizeable and can be tweaked via optional settings. However, in most cases, you can leave the settings at default.
