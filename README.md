@@ -9,6 +9,7 @@ All features are customizeable and can be tweaked via optional settings. However
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model.
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
+- **Force Convex** - Forces all existing hulls in a collision model to be convex. 
 
 ## Installation
 1. For the newest, bleeding edge version, download [source_engine_collision_tools.py](https://github.com/theanine3D/source-engine-collision-tools/raw/main/source_engine_collision_tools.py) (right click this link and Save As...) If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
