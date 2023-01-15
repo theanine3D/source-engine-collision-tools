@@ -9,3 +9,8 @@ Blender addon for generating and optimizing collision models for use in Source E
 
 ## Planned Features ##
 - ** Generate Source Engine QC ** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. Crowbar)
+
+## Previews ##
+![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
+![merge similars](https://user-images.githubusercontent.com/88953117/212523164-0a4c54df-5f35-42b5-9131-57e4ed92a899.png)
+![remove-thin-faces](https://user-images.githubusercontent.com/88953117/212523166-9b911cbc-649d-43b5-918b-ecd9aa41acd9.gif)
