@@ -13,6 +13,11 @@ All features are customizeable and can be tweaked via optional settings. However
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. Crowbar)
 
 ## Previews ##
+### Interface ###
+![image](https://user-images.githubusercontent.com/88953117/212523398-665920a8-d63d-44aa-9590-4520358a136a.png)
+### Automatic Collision Generation
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
+### Merge Adjacent Similars ###
 ![merge similars](https://user-images.githubusercontent.com/88953117/212523164-0a4c54df-5f35-42b5-9131-57e4ed92a899.png)
+### Remove Thin Faces
 ![remove-thin-faces](https://user-images.githubusercontent.com/88953117/212523166-9b911cbc-649d-43b5-918b-ecd9aa41acd9.gif)
