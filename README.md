@@ -12,7 +12,7 @@ All features are customizeable and can be tweaked via optional settings. However
 
 ## Previews ##
 ### Interface ###
-![image](https://user-images.githubusercontent.com/88953117/212523398-665920a8-d63d-44aa-9590-4520358a136a.png)
+![image](https://user-images.githubusercontent.com/88953117/212564712-1bdc1ffd-2982-49e8-85bf-2fc2e9a7fca0.png)
 ### Automatic Collision Generation
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
 ### Merge Adjacent Similars ###
