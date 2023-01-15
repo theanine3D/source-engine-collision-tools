@@ -18,6 +18,6 @@ All features are customizeable and can be tweaked via optional settings. However
 ### Automatic Collision Generation
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
 ### Merge Adjacent Similars ###
-![merge similars](https://user-images.githubusercontent.com/88953117/212523164-0a4c54df-5f35-42b5-9131-57e4ed92a899.png)
+![merge-similars](https://user-images.githubusercontent.com/88953117/212523801-86267e0e-092b-4a14-bdd0-8de8c5a7de5f.gif)
 ### Remove Thin Faces
 ![remove-thin-faces](https://user-images.githubusercontent.com/88953117/212523166-9b911cbc-649d-43b5-918b-ecd9aa41acd9.gif)
