@@ -31,7 +31,9 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
     Thin_Threshold: bpy.props.FloatProperty(
         name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.001, max=.5, default=.1)
     Thin_Linked: bpy.props.BoolProperty(
-        name="Affect Linked", description="If enabled, any faces that are linked/connected to the thin faces will also be removed. Leave enabled if you're trying to clean up an existing collision model. Only disable this setting if you want to use Remove Thin Faces on the original non-collision model prior to actually generating the collision.", default=True)
+        name="Linked", description="If enabled, any faces that are linked/connected to the thin faces will also be removed. Leave enabled if you're trying to clean up an existing collision model. Only disable this setting if you want to use Remove Thin Faces on the original non-collision model prior to actually generating the collision.", default=True)
+    Thin_Collapse: bpy.props.BoolProperty(
+        name="Collapse", description="If enabled, faces will not be deleted, but instead will be collapsed in-place, preventing holes in geometry. If Linked is also enabled, the linked faces will be forced to become convex.", default=True)
     QC_Folder: bpy.props.StringProperty(
         name="QC Folder", subtype="DIR_PATH", description="Full path of the folder in which to save the generated QCs", default="//export//phys//", maxlen=1024)
     QC_Src_Models_Dir: bpy.props.StringProperty(
@@ -479,6 +481,7 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
             faces = obj.data.polygons
             area_threshold = bpy.context.scene.SrcEngCollProperties.Thin_Threshold
             affect_linked = bpy.context.scene.SrcEngCollProperties.Thin_Linked
+            collapse = bpy.context.scene.SrcEngCollProperties.Thin_Collapse
             cumulative_area = 0
 
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -501,9 +504,18 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
                 faces[i].select = True
 
             bpy.ops.object.mode_set(mode='EDIT')
-            if affect_linked:
-                bpy.ops.mesh.select_linked(delimit=set())
-            bpy.ops.mesh.delete(type='FACE')
+
+            if collapse == True:
+                bpy.ops.mesh.edge_collapse()
+                bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+                if affect_linked:
+                    bpy.ops.mesh.select_linked(delimit=set())
+                    bpy.ops.mesh.convex_hull(join_triangles=False)
+            else:
+                if affect_linked:
+                    bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.delete(type='FACE')
+
             bpy.ops.object.mode_set(mode='OBJECT')
 
         return {'FINISHED'}
@@ -535,6 +547,7 @@ class Cleanup_ForceConvex(bpy.types.Operator):
                 bpy.ops.mesh.select_linked(delimit=set())
                 bpy.ops.mesh.delete(type='VERT')
                 bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_mode(type='FACE')
                 bpy.ops.object.mode_set(mode='OBJECT')
                 bpy.ops.object.shade_smooth()
 
@@ -555,7 +568,6 @@ class Cleanup_ForceConvex(bpy.types.Operator):
                     else:
                         # Select the entire hull
                         bpy.ops.object.mode_set(mode='EDIT')
-                        bpy.ops.mesh.select_mode(type='FACE')
                         bpy.ops.mesh.select_linked(delimit=set())
 
                         # Force convex
@@ -683,11 +695,14 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup1_Label = boxCleanup.row()
         rowCleanup1 = boxCleanup.row()
         rowCleanup2 = boxCleanup.row()
+        boxCleanup.separator()
         rowCleanup3_Label = boxCleanup.row()
         rowCleanup3 = boxCleanup.row()
         rowCleanup4 = boxCleanup.row()
-        rowCleanup5_Label = boxCleanup.row()
         rowCleanup5 = boxCleanup.row()
+        boxCleanup.separator()
+        rowCleanup6_Label = boxCleanup.row()
+        rowCleanup6 = boxCleanup.row()
 
         rowCleanup1_Label.label(text="Similarity")
         rowCleanup1.prop(bpy.context.scene.SrcEngCollProperties, "Similar_Factor")
@@ -696,11 +711,12 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
 
         rowCleanup3_Label.label(text="Thinness")
         rowCleanup3.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Threshold")
-        rowCleanup3.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Linked")
-        rowCleanup4.operator("object.src_eng_cleanup_remove_thin_faces")
+        rowCleanup4.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Linked")
+        rowCleanup4.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Collapse")
+        rowCleanup5.operator("object.src_eng_cleanup_remove_thin_faces")
 
-        rowCleanup5_Label.label(text="Other")
-        rowCleanup5.operator("object.src_eng_cleanup_force_convex")
+        rowCleanup6_Label.label(text="Other")
+        rowCleanup6.operator("object.src_eng_cleanup_force_convex")
 
         # Compile / QC UI
         boxQC = row6.box()
