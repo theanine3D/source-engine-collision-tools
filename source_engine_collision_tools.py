@@ -1,4 +1,5 @@
 import bpy
+from mathutils import Vector
 from bpy.utils import(register_class, unregister_class)
 from bpy.types import(Panel, PropertyGroup)
 from bpy.props import(StringProperty,
@@ -389,56 +390,121 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 faces = work_obj.data.polygons
                 
                 while len(faces) > 0:
-                    # Isolate similar and adjacent geometry in the copy
+                    # Make sure no faces are selected first
                     bpy.ops.object.mode_set(mode='EDIT')
                     bpy.ops.mesh.select_all(action='DESELECT')
                     bpy.ops.object.mode_set(mode='OBJECT')
-                    faces[0].select = True
+
+                    # Select the face and any linked to it
+                    try:
+                        faces[0].select = True
+                    except:
+                        break
                     bpy.ops.object.mode_set(mode='EDIT')
                     bpy.ops.mesh.select_mode(type='FACE')
                     bpy.ops.mesh.select_linked(delimit=set())
-                    try:
-                        bpy.ops.mesh.select_similar(type='PERIMETER', threshold=bpy.context.scene.SrcEngCollProperties.Similar_Factor)    # threshold 0.5 for Source scale,, .9 for Blender scale?
-                        bpy.ops.mesh.select_mode(type='VERT')
-                        bpy.ops.mesh.select_linked(delimit=set())
-                    except:
-                        continue
-                    else:
-                        # Isolate the faces to their own object
-                        bpy.ops.mesh.separate(type='SELECTED')
-                        bpy.ops.object.mode_set(mode='OBJECT')
-                        obj.select_set(False)
-                        work_obj.select_set(False)
-                        temp_obj = bpy.context.selected_objects[0]
-                        bpy.context.view_layer.objects.active = temp_obj
 
-                        # Merge faces
-                        bpy.ops.object.mode_set(mode='EDIT')
-                        bpy.ops.mesh.select_all(action='SELECT')
-                        bpy.ops.mesh.select_mode(type='VERT')
-                        bpy.ops.mesh.remove_doubles(threshold=doubles_threshold)       # threshold 10 for Source scale, .15 for Blender scale
-                        bpy.ops.mesh.select_mode(type='FACE')
-                        bpy.ops.mesh.separate(type='LOOSE')
+                    # Store the selected face indexes
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    selected_face_indexes = [f for f in faces if f.select == True]
 
-                        bpy.ops.object.mode_set(mode='OBJECT')
-                        bpy.ops.object.mode_set(mode='EDIT')
-                        bpy.ops.mesh.select_all(action='SELECT')
-                        bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
-                        bpy.ops.mesh.convex_hull(join_triangles=False)
-                        bpy.ops.mesh.dissolve_limited() # angle_limit = 0.174533 is same as '10 degrees'
-                        bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
-                        bpy.ops.mesh.convex_hull(join_triangles=False)
+                    # Duplicate the selected faces and get dimensions + origin
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.duplicate_move(MESH_OT_duplicate={"mode":1}, TRANSFORM_OT_translate={"value":(0, 0, 0), "orient_axis_ortho":'X', "orient_type":'GLOBAL', "orient_matrix":((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type":'GLOBAL', "constraint_axis":(False, False, False), "mirror":False, "use_proportional_edit":False, "snap":False, "gpencil_strokes":False, "cursor_transform":False, "texture_space":False, "remove_on_cancel":False, "view2d_edge_pan":False, "release_confirm":False, "use_accurate":False, "use_automerge_and_split":False})
+                    bpy.ops.mesh.separate(type='SELECTED')
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    obj.select_set(False)
+                    work_obj.select_set(False)
+                    measurement_obj = bpy.context.selected_objects[0]
+                    bpy.context.view_layer.objects.active = measurement_obj
+                    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
 
-                        # Join and store the merged hulls, so we can rejoin all merged pieces later
-                        bpy.ops.object.mode_set(mode='OBJECT')
-                        bpy.ops.object.join()
+                    hull_dimensions = bpy.context.active_object.dimensions
+                    hull_bound_box = bpy.context.active_object.bound_box
+                    x_coords = list()
+                    y_coords = list()
+                    z_coords = list()
 
-                        obj_parts.add(bpy.context.active_object)
+                    for v in hull_bound_box:
+                        # Convert the bounding box to world coordinates
+                        # v = measurement_obj.matrix_world @ Vector(v)
+                        v = Vector(v)
+                        x_coords.append(v[0])
+                        y_coords.append(v[1])
+                        z_coords.append(v[2])
 
-                        # Deselect the piece, and reselect the main object
-                        bpy.ops.object.select_all(action='DESELECT')
-                        work_obj.select_set(True)
-                        bpy.context.view_layer.objects.active = work_obj
+                    # Store the min and max coords (adding/substracting the hull dimensions x 2.5)
+                    x_bounds = [min(x_coords) - (hull_dimensions[0] * 2.5), max(x_coords) + (hull_dimensions[0] * 2.5)]
+                    y_bounds = [min(y_coords) - (hull_dimensions[1] * 2.5), max(y_coords) + (hull_dimensions[1] * 2.5)]
+                    z_bounds = [min(z_coords) - (hull_dimensions[2] * 2.5), max(z_coords) + (hull_dimensions[2] * 2.5)]
+
+                    # Delete the measurement copy and re-select the original work copy
+                    bpy.data.objects.remove(measurement_obj)
+                    work_obj.select_set(True)
+                    bpy.context.view_layer.objects.active = work_obj
+
+                    faces[0].select = True
+
+                    # Select similar (perimeter)
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_linked(delimit=set())
+                    bpy.ops.mesh.select_similar(type='PERIMETER', threshold=bpy.context.scene.SrcEngCollProperties.Similar_Factor)    # threshold 0.5 for Source scale,, .9 for Blender scale?
+                    bpy.ops.mesh.select_mode(type='VERT')
+                    bpy.ops.mesh.select_linked(delimit=set())
+
+                    # Store the selected face indexes
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    selected_face_indexes = [f.index for f in faces if f.select == True]
+
+                    # Check if each face center is within the boundaries of the bound box (x 2.5). TODO: Check the vertices too, for more accuracy
+                    for i in selected_face_indexes:
+                        center = faces[i].center
+                        if center[0] < x_bounds[0] or center[0] > x_bounds[1]:
+                            faces[i].select = False
+                        if center[1] < y_bounds[0] or center[1] > y_bounds[1]:
+                            faces[i].select = False
+                        if center[2] < z_bounds[0] or center[2] > z_bounds[1]:
+                            faces[i].select = False
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_less()
+                    bpy.ops.mesh.select_less()
+                    bpy.ops.mesh.select_less()
+                    
+                    # Isolate the faces to their own object
+                    bpy.ops.mesh.separate(type='SELECTED')
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    obj.select_set(False)
+                    work_obj.select_set(False)
+                    temp_obj = bpy.context.selected_objects[0]
+                    bpy.context.view_layer.objects.active = temp_obj
+
+                    # Merge faces
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_all(action='SELECT')
+                    bpy.ops.mesh.select_mode(type='VERT')
+                    bpy.ops.mesh.remove_doubles(threshold=doubles_threshold)       # threshold 10 for Source scale, .15 for Blender scale
+                    bpy.ops.mesh.select_mode(type='FACE')
+                    bpy.ops.mesh.separate(type='LOOSE')
+
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_all(action='SELECT')
+                    bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+                    bpy.ops.mesh.convex_hull(join_triangles=False)
+                    bpy.ops.mesh.dissolve_limited() # angle_limit = 0.174533 is same as '10 degrees'
+                    bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+                    bpy.ops.mesh.convex_hull(join_triangles=False)
+
+                    # Join and store the merged hulls, so we can rejoin all merged pieces later
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    bpy.ops.object.join()
+
+                    obj_parts.add(bpy.context.active_object)
+
+                    # Deselect the piece, and reselect the main object
+                    bpy.ops.object.select_all(action='DESELECT')
+                    work_obj.select_set(True)
+                    bpy.context.view_layer.objects.active = work_obj
             
                 bpy.ops.object.mode_set(mode='OBJECT')
                 bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
