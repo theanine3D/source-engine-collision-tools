@@ -25,10 +25,10 @@ All features are customizeable and can be tweaked via optional settings. However
 
 ## Previews ##
 ### Interface ###
-![merge-similars](https://user-images.githubusercontent.com/88953117/213289714-d13d5bb8-ef37-439e-8eac-1370b4716bab.gif)
+![image](https://user-images.githubusercontent.com/88953117/213289952-681acd91-0bd2-4684-96c6-c51c4eaa15bd.png)
 ### Automatic Collision Generation
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
 ### Merge Adjacent Similars ###
-![merge-similars](https://user-images.githubusercontent.com/88953117/212523801-86267e0e-092b-4a14-bdd0-8de8c5a7de5f.gif)
+![merge-similars](https://user-images.githubusercontent.com/88953117/213289714-d13d5bb8-ef37-439e-8eac-1370b4716bab.gif)
 ### Remove Thin Faces
 ![remove-thin-faces](https://user-images.githubusercontent.com/88953117/212523166-9b911cbc-649d-43b5-918b-ecd9aa41acd9.gif)
