@@ -18,6 +18,11 @@ All features are customizeable and can be tweaked via optional settings. However
 
 (Note: The .PY file is installed directly, without a ZIP file)
 
+## Tips
+-Decimation (by the Generate Collision Mesh operator) generally makes the Merge Adjacent Similars operator less effective, but Decimation is generally much faster at reducing the final complexity of the collision mesh.
+-Merge Adjacent Similars is less effective on overly large, comlex models. For best results, split up a large complex model into separate pieces first, and then use Merge Adjacent Similars on each individual piece.
+-If you don't get good results after running one of the operators, try increasing the Scale Modifier and Distance Modifier settings. Larger models can require higher or lower values for those settings.
+
 ## Previews ##
 ### Interface ###
 ![image](https://user-images.githubusercontent.com/88953117/212566774-554024fb-a7e8-42c9-b78e-70aa4b4eb603.png)
