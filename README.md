@@ -20,7 +20,7 @@ All features are customizeable and can be tweaked via optional settings. There i
 
 ## Tips
 - Decimation (by the Generate Collision Mesh operator) generally makes the Merge Adjacent Similars operator less effective, but Decimation is generally much faster at reducing the final complexity of the collision mesh.
-- Merge Adjacent Similars is less effective on overly large, complex models. For best results, split up a large complex model into separate pieces first, and then use Merge Adjacent Similars on each individual piece.
+- Merge Adjacent Similars is less effective on overly large, complex models. For best results, split up a large complex model into several (3-5) separate pieces first, and then use Merge Adjacent Similars on each individual piece.
 - If you don't get good results after running one of the operators, try increasing the Scale Modifier and Distance Modifier settings. Larger models can require higher or lower values for those settings.
 
 ## Previews ##
