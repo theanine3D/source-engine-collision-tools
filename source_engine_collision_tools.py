@@ -35,7 +35,7 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
     Thin_Linked: bpy.props.BoolProperty(
         name="Linked", description="If enabled, any faces that are linked/connected to the thin faces will also be removed. Leave enabled if you're trying to clean up an existing collision model. Only disable this setting if you want to use Remove Thin Faces on the original non-collision model prior to actually generating the collision.", default=True)
     Thin_Collapse: bpy.props.BoolProperty(
-        name="Collapse", description="If enabled, faces will not be deleted, but instead will be collapsed in-place, preventing holes in geometry. If Linked is also enabled, the linked faces will be forced to become convex.", default=True)
+        name="Collapse", description="If enabled, faces will not be deleted, but instead will be collapsed in-place, preventing holes in geometry", default=True)
     QC_Folder: bpy.props.StringProperty(
         name="QC Folder", subtype="DIR_PATH", description="Full path of the folder in which to save the generated QCs", default="//export//phys//", maxlen=1024)
     QC_Src_Models_Dir: bpy.props.StringProperty(
@@ -326,6 +326,8 @@ class SplitUpSrcCollision(bpy.types.Operator):
                 bpy.context.scene.collection.children.link(root_collection)
 
             obj = bpy.context.active_object
+            bpy.ops.object.transform_apply(
+                location=True, rotation=True, scale=True)
             original_name = obj.name
             obj_collections = [
                 c for c in bpy.data.collections if obj.name in c.objects.keys()]
@@ -381,7 +383,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
                 new_group_collection.objects.link(new_group_obj)
                 bpy.ops.object.transform_apply(
-                    location=False, rotation=True, scale=True)
+                    location=True, rotation=True, scale=True)
                 new_group_obj.select_set(False)
 
                 hull_groups.pop()
@@ -678,7 +680,6 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
                     use_extend=False, use_expand=False, type='VERT')
                 if affect_linked:
                     bpy.ops.mesh.select_linked(delimit=set())
-                    bpy.ops.mesh.convex_hull(join_triangles=False)
             else:
                 if affect_linked:
                     bpy.ops.mesh.select_linked(delimit=set())
@@ -923,6 +924,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         boxCleanup.separator()
         rowCleanup6_Label = boxCleanup.row()
         rowCleanup6 = boxCleanup.row()
+        rowCleanup7 = boxCleanup.row()
 
         rowCleanup1_Label.label(text="Similarity")
         rowCleanup1.prop(
@@ -938,9 +940,10 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup4.prop(
             bpy.context.scene.SrcEngCollProperties, "Thin_Collapse")
         rowCleanup5.operator("object.src_eng_cleanup_remove_thin_faces")
+        rowCleanup6.label(text="")
 
-        rowCleanup6_Label.label(text="Other")
-        rowCleanup6.operator("object.src_eng_cleanup_force_convex")
+        rowCleanup7_Label.label(text="Other")
+        rowCleanup7.operator("object.src_eng_cleanup_force_convex")
 
         # Compile / QC UI
         boxQC = row6.box()
