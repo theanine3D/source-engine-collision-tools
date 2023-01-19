@@ -9,7 +9,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (0, 3),
+    "version": (0, 4),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -23,15 +23,15 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
     Decimate_Ratio: bpy.props.FloatProperty(
         name="Decimate Ratio", subtype="FACTOR", description="At 1.0, decimation is disabled. Lower value = stronger decimation, resulting in less accurate but more performant collision mesh. Note: Decimation reduces effectiveness of Merge Adjacent Similars", max=1.0, min=0.0, default=1)
     Extrusion_Modifier: bpy.props.FloatProperty(
-        name="Extrude Factor", subtype="FACTOR", description="The setting affects the extrusion of each hull. Default will work in most cases", min=0.01, max=20.0, default=1.0)
-    Scale_Modifier: bpy.props.IntProperty(
-        name="Scale Modifier", description="Default will work in most cases. If you see chunks of geometry missing from the generated collision model, try setting this to something lower", min=-5, max=5, default=0)
+        name="Extrude Factor", description="The setting affects the extrusion of each hull. Default will work in most cases", min=0.001, soft_max=200.0, default=40.0)
+    Scale_Modifier: bpy.props.FloatProperty(
+        name="Scale Modifier", subtype="FACTOR", description="Default will work in most cases. If you see chunks of geometry missing from the generated collision model, try setting this to something lower", soft_min=-0.001, soft_max=100, default=1)
     Similar_Factor: bpy.props.FloatProperty(
-        name="Similar Factor", subtype="FACTOR", description="Similarity intensity for Merge Adjacent Similars. A higher factor will result in more hulls merging together, but at the cost of accuracy", min=0.01, max=1.0, default=0.01)
-    Distance_Modifier: bpy.props.IntProperty(
-        name="Distance Modifier", description="Affects the distance at which hulls can be merged. Default will work in most cases. A higher number will result in more hulls merging together, but at the cost of accuracy", soft_min=-100, soft_max=100, default=0)
+        name="Similar Factor", subtype="FACTOR", description="Similarity intensity for Merge Adjacent Similars. A higher factor will result in more hulls merging together, but at the cost of accuracy", min=0.0001, max=1.0, default=0.001)
+    Distance_Modifier: bpy.props.FloatProperty(
+        name="Distance Modifier", description="Affects the distance at which hulls can be merged. Default will work in most cases. A higher number will result in more hulls merging together, but at the cost of accuracy", soft_min=0.01, max=50, default=10)
     Thin_Threshold: bpy.props.FloatProperty(
-        name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.001, max=.5, default=.1)
+        name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.001, max=.5, default=.015)
     Thin_Linked: bpy.props.BoolProperty(
         name="Linked", description="If enabled, any faces that are linked/connected to the thin faces will also be removed. Leave enabled if you're trying to clean up an existing collision model. Only disable this setting if you want to use Remove Thin Faces on the original non-collision model prior to actually generating the collision.", default=True)
     Thin_Collapse: bpy.props.BoolProperty(
@@ -83,15 +83,19 @@ def check_for_selected(verbose=True):
         return False
 
 
-def get_avg_area(obj):
-    faces = obj.data.polygons
-    cumulative_area = 0
-
-    for f in faces:
-        cumulative_area += f.area
-
-    average_area = cumulative_area / len(faces)
-    return average_area
+def get_avg_length(obj):
+    object = bpy.context.active_object
+    edges = object.data.edges
+    lengths = list()
+    for edge in edges:
+        v0 = object.data.vertices[edge.vertices[0]]
+        v1 = object.data.vertices[edge.vertices[1]]
+        x2 = (v0.co[0] - v1.co[0]) ** 2
+        y2 = (v0.co[1] - v1.co[1]) ** 2
+        z2 = (v0.co[2] - v1.co[2]) ** 2
+        lengths.append((x2 + y2 + z2) ** 0.5)
+    average_length = sum(lengths) / len(lengths)
+    return average_length
 
 
 def generate_SMD_lines():
@@ -169,7 +173,8 @@ class GenerateSrcCollision(bpy.types.Operator):
             obj = bpy.context.active_object
             obj_collections = [
                 c for c in bpy.data.collections if obj.name in c.objects.keys()]
-            extrude_modifier = bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier
+            extrude_modifier = (-1) * \
+                bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier
 
             if "_phys" in bpy.context.active_object.name:
                 display_msg_box(
@@ -177,12 +182,7 @@ class GenerateSrcCollision(bpy.types.Operator):
                 return {'FINISHED'}
 
             original_dimensions = obj.dimensions
-            longest_dim = float(max(original_dimensions))
-            doubles_threshold = 0.14999999999999999769 * \
-                (1.00080240446594588574 ** longest_dim)
-            # -43.5 for Source scale, -0.18 for Blender scale
-            extrude_factor = -0.17962946163683473686 * \
-                (1.00103086506704893382 ** longest_dim) * extrude_modifier
+            doubles_threshold = bpy.context.scene.SrcEngCollProperties.Distance_Modifier
 
             obj_phys = None
             collection_phys = None
@@ -198,8 +198,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             obj_phys.name = obj.name + "_phys"
 
             # Resize object, based on user setting "Scale Factor"
-            scale_modifier = (
-                1 * (10 ** float(bpy.context.scene.SrcEngCollProperties.Scale_Modifier)))
+            scale_modifier = bpy.context.scene.SrcEngCollProperties.Scale_Modifier
             bpy.ops.transform.resize(value=(scale_modifier, scale_modifier, scale_modifier), orient_type='GLOBAL', orient_matrix=(
                 (1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=False, use_proportional_edit=False, snap=False)
             bpy.ops.object.transform_apply(
@@ -235,7 +234,8 @@ class GenerateSrcCollision(bpy.types.Operator):
             # Move the extruded faces inward
             bpy.context.scene.tool_settings.transform_pivot_point = 'INDIVIDUAL_ORIGINS'
             bpy.ops.transform.shrink_fatten(value=(
-                extrude_factor), use_even_offset=False, mirror=True, use_proportional_edit=False, snap=False)
+                extrude_modifier), use_even_offset=False, mirror=True, use_proportional_edit=False, snap=False)
+
             bpy.ops.mesh.select_all(action='SELECT')
 
             bpy.ops.mesh.normals_make_consistent(inside=False)
@@ -412,13 +412,10 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
         if check_for_selected() == True:
 
             obj = bpy.context.active_object
+            original_dimensions = bpy.context.active_object.dimensions
             obj_parts = set()
-            original_dimensions = obj.dimensions
-            longest_dim = float(max(original_dimensions))
-            doubles_threshold = 0.14999999999999999769 * (1.00080240446594588574 ** longest_dim) * (
-                2 ^ bpy.context.scene.SrcEngCollProperties.Distance_Modifier)
-            # Similar threshold is set by user - but just in case, exponential formula here for documentation purposes
-            # similarity_threshold = 0.90019867306982895535 * (0.99988964434256221495 ** longest_dim)
+            doubles_threshold = bpy.context.scene.SrcEngCollProperties.Distance_Modifier
+            similarity_threshold = bpy.context.scene.SrcEngCollProperties.Similar_Factor
 
             # Create working copy
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -433,8 +430,8 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 location=True, rotation=True, scale=True)
             work_obj = bpy.context.active_object
             faces = work_obj.data.polygons
-            edges = work_obj.data.edges
-            verts = work_obj.data.vertices
+            # edges = work_obj.data.edges
+            # verts = work_obj.data.vertices
 
             while len(faces) > 0:
                 # Make sure no faces are selected first
@@ -506,8 +503,14 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 # Select similar (perimeter)
                 bpy.ops.object.mode_set(mode='EDIT')
                 bpy.ops.mesh.select_linked(delimit=set())
+                # Old method used face perimeter - but EDGE length, normal, and direction are more effective
+                # bpy.ops.mesh.select_similar(
+                #     type='PERIMETER', threshold=bpy.context.scene.SrcEngCollProperties.Similar_Factor)
+                # bpy.ops.mesh.select_similar(
+                #     type='DIR', threshold=.0001)
+                bpy.ops.mesh.select_mode(type='EDGE')
                 bpy.ops.mesh.select_similar(
-                    type='PERIMETER', threshold=bpy.context.scene.SrcEngCollProperties.Similar_Factor)
+                    type='DIR', threshold=similarity_threshold)
                 bpy.ops.mesh.select_mode(type='VERT')
                 bpy.ops.mesh.select_linked(delimit=set())
 
@@ -559,11 +562,17 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 temp_obj = bpy.context.selected_objects[0]
                 bpy.context.view_layer.objects.active = temp_obj
 
+                # Resize object, based on user setting "Scale Factor"
+                scale_modifier = bpy.context.scene.SrcEngCollProperties.Scale_Modifier
+                bpy.ops.transform.resize(value=(scale_modifier, scale_modifier, scale_modifier), orient_type='GLOBAL', orient_matrix=(
+                    (1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=False, use_proportional_edit=False, snap=False)
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+
                 # Merge faces
                 bpy.ops.object.mode_set(mode='EDIT')
                 bpy.ops.mesh.select_all(action='SELECT')
                 bpy.ops.mesh.select_mode(type='VERT')
-                # threshold 10 for Source scale, .15 for Blender scale
                 bpy.ops.mesh.remove_doubles(threshold=doubles_threshold)
                 bpy.ops.mesh.select_mode(type='FACE')
                 bpy.ops.mesh.separate(type='LOOSE')
@@ -614,7 +623,8 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.shade_smooth()
 
-            # Apply final transforms
+            # Reset dimensions and apply final transforms
+            new_obj.dimensions = original_dimensions
             bpy.ops.object.transform_apply(
                 location=True, rotation=True, scale=True)
 
@@ -807,8 +817,40 @@ class GenerateSourceQC(bpy.types.Operator):
 
         return {'FINISHED'}
 
-# End classes
+# Generate Source Engine QC
 
+
+class RecommendedCollSettings(bpy.types.Operator):
+    """Automatically modify the settings below based on the currently selected, active mesh object. Note: This is not foolproof. You may still need to tweak the settings yourself"""
+    bl_idname = "object.src_eng_recc_settings"
+    bl_label = "Recommended Settings"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+
+        if check_for_selected() == True:
+
+            obj = bpy.context.active_object
+
+            avg_length = get_avg_length(obj)
+            extrude_modifier = avg_length * 0.07
+            distance_modifier = avg_length * 0.05
+            scale_modifier = 1
+
+            # For scale modifier, guideline is that average edge length must be roughly 487.4999679487 or lower
+            # for Remove Doubles to work, due to its hardcoded 50 threshold limit
+            if distance_modifier > 50.0:
+                scale_modifier = 1 / (distance_modifier/50.0)
+                distance_modifier = 50.0
+
+            bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier = extrude_modifier
+            bpy.context.scene.SrcEngCollProperties.Distance_Modifier = distance_modifier
+            bpy.context.scene.SrcEngCollProperties.Scale_Modifier = scale_modifier
+
+        return {'FINISHED'}
+
+
+# End classes
 
 ops = (
     GenerateSrcCollision,
@@ -816,7 +858,8 @@ ops = (
     GenerateSourceQC,
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinFaces,
-    Cleanup_ForceConvex
+    Cleanup_ForceConvex,
+    RecommendedCollSettings
 )
 
 
@@ -845,6 +888,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         layout = self.layout
         layout.enabled = check_for_selected(verbose=False)
 
+        row0 = layout.row()
         row1 = layout.row()
         row2 = layout.row()
         row3 = layout.row()
@@ -857,6 +901,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row6 = layout.row()
         layout.separator()
 
+        row0.operator("object.src_eng_recc_settings")
         row1.prop(bpy.context.scene.SrcEngCollProperties, "Decimate_Ratio")
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Extrusion_Modifier")
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Scale_Modifier")
@@ -924,7 +969,8 @@ classes = (
     GenerateSourceQC,
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinFaces,
-    Cleanup_ForceConvex
+    Cleanup_ForceConvex,
+    RecommendedCollSettings
 )
 
 
