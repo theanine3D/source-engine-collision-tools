@@ -206,6 +206,8 @@ class GenerateSrcCollision(bpy.types.Operator):
 
             bpy.ops.object.shade_smooth()
             bpy.ops.object.mode_set(mode="EDIT")
+            bpy.ops.mesh.reveal()
+            bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.mesh.select_mode(
                 use_extend=False, use_expand=False, type='VERT')
             bpy.ops.mesh.select_all(action='SELECT')
@@ -425,6 +427,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
             # Make sure no faces are selected
             bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.reveal()
             bpy.ops.mesh.select_mode(type='FACE')
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -701,10 +704,11 @@ class Cleanup_ForceConvex(bpy.types.Operator):
     def execute(self, context):
         if check_for_selected() == True:
 
-            work_obj = bpy.context.active_object
+            original_name = bpy.context.active_object.name
 
             # Make sure no faces are selected
             bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.reveal()
             bpy.ops.mesh.select_mode(type='FACE')
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -723,38 +727,28 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.shade_smooth()
 
-            faces = work_obj.data.polygons
-            i = len(faces)-1
+            # Select all hulls and separate them into separate objects
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.separate(type='LOOSE')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
 
-            while i >= 0:
+            # Force convex
+            bpy.ops.mesh.quads_convert_to_tris(
+                quad_method='BEAUTY', ngon_method='BEAUTY')
+            bpy.ops.mesh.convex_hull(join_triangles=False)
+            bpy.ops.mesh.dissolve_limited()  # angle_limit = 0.174533 is same as '10 degrees'
+            bpy.ops.mesh.quads_convert_to_tris(
+                quad_method='BEAUTY', ngon_method='BEAUTY')
+            bpy.ops.mesh.convex_hull(join_triangles=False)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
 
-                # Deselect everything first
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.object.mode_set(mode='OBJECT')
-
-                try:
-                    faces[i].select = True
-                except:
-                    break
-                else:
-                    # Select the entire hull
-                    bpy.ops.object.mode_set(mode='EDIT')
-                    bpy.ops.mesh.select_linked(delimit=set())
-
-                    # Force convex
-                    bpy.ops.mesh.quads_convert_to_tris(
-                        quad_method='BEAUTY', ngon_method='BEAUTY')
-                    bpy.ops.mesh.convex_hull(join_triangles=False)
-                    bpy.ops.mesh.dissolve_limited()  # angle_limit = 0.174533 is same as '10 degrees'
-                    bpy.ops.mesh.quads_convert_to_tris(
-                        quad_method='BEAUTY', ngon_method='BEAUTY')
-                    bpy.ops.mesh.convex_hull(join_triangles=False)
-                    bpy.ops.mesh.select_all(action='DESELECT')
-                    bpy.ops.object.mode_set(mode='OBJECT')
-                    i -= 1
-
-            # Apply final transforms
+            # Rejoin and clean up
+            bpy.ops.object.join()
+            bpy.context.active_object.name = original_name
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
 
@@ -942,7 +936,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup5.operator("object.src_eng_cleanup_remove_thin_faces")
         rowCleanup6.label(text="")
 
-        rowCleanup7_Label.label(text="Other")
+        rowCleanup7.label(text="Other")
         rowCleanup7.operator("object.src_eng_cleanup_force_convex")
 
         # Compile / QC UI
