@@ -2,7 +2,7 @@
 Blender (3.0+) addon for generating and optimizing collision models for use in Source Engine games (ie. TF2, GMod, L4D2). Works best when combined with the [Blender Source Tools](http://steamreview.org/BlenderSourceTools/).
 
 ## Features
-All features are customizeable and can be tweaked via optional settings. However, in most cases, you can leave the settings at default.
+All features are customizeable and can be tweaked via optional settings. However, in most cases, you can leave the settings at default. There is also a "Recommended Settings" button that will automatically guess the best settings for you based on the currently selected, active object.
 - **Generate Collision Mesh** - Generate a Source Engine-compliant collision model based on the current active object.
   - Supports (optional) decimation, to automatically reduce the complexity of the resulting collision model
 - **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
