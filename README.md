@@ -10,8 +10,7 @@ All features are customizeable and can be tweaked via optional settings. There i
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
 - **Force Convex** - Forces all existing hulls in a collision model to be convex. Can be run after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
-- **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map. The very first part, ending in "_part_000.mdl", must already be in the VMF somewhere (such as in a prop-static), so it can be used as a template for all the other parts.
-
+- **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map. 
 
 ## Installation
 1. For the newest, bleeding edge version, download [source_engine_collision_tools.py](https://github.com/theanine3D/source-engine-collision-tools/raw/main/source_engine_collision_tools.py) (right click this link and Save As...) If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
@@ -24,6 +23,7 @@ All features are customizeable and can be tweaked via optional settings. There i
 - Decimation (by the Generate Collision Mesh operator) generally makes the Merge Adjacent Similars operator less effective, but Decimation is generally much faster at reducing the final complexity of the collision mesh.
 - Merge Adjacent Similars is less effective on overly large, complex models. For best results, split up a large complex model into several (3-5) separate pieces first, and then use Merge Adjacent Similars on each individual piece.
 - If you don't get good results after running one of the operators, try increasing the Scale Modifier and Distance Modifier settings. Larger models can require higher or lower values for those settings.
+- For the "Update VMF" feature, the very first part of your split-up collision mesh, ending in 'part_000.mdl', must already be in the VMF somewhere (such as in a prop-static), so it can be used as a template for all the other parts.
 
 ## Previews ##
 ### Interface ###
