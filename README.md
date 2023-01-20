@@ -23,7 +23,7 @@ All features are customizeable and can be tweaked via optional settings. There i
 - Decimation (by the Generate Collision Mesh operator) generally makes the Merge Adjacent Similars operator less effective, but Decimation is generally much faster at reducing the final complexity of the collision mesh.
 - Merge Adjacent Similars is less effective on overly large, complex models. For best results, split up a large complex model into several (3-5) separate pieces first, and then use Merge Adjacent Similars on each individual piece.
 - For the "Update VMF" feature, the very first part of your split-up collision mesh, ending in 'part_000.mdl', must already be in the VMF somewhere (such as in a prop-static), so it can be used as a template for all the other parts.
-- The "Update VMF" feature should only be used if you're planning to use split-up collision. Source Engine has a limit of 32 hulls per collision mesh - anything higher than that produces severe lag. By splitting up your collision mesh into parts, you avoid this, and the Update VMF feature will add numerous (even dozens) of parts automatically for you to a VMF file.
+- Source Engine has a limit of 32 hulls per collision mesh - anything higher than that produces severe lag. The "Update VMF" feature comes in handy for this. By splitting up your collision mesh into 32-hull parts, you prevent lag, and the Update VMF feature can add numerous (even dozens) of parts automatically for you to a VMF file.
 
 ## Previews ##
 ### Interface ###
