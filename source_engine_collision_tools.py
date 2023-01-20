@@ -394,6 +394,15 @@ class SplitUpSrcCollision(bpy.types.Operator):
             original_name = obj.name
             obj_collections = [
                 c for c in bpy.data.collections if obj.name in c.objects.keys()]
+            for c in obj_collections:
+                if "_part_" in c:
+                    c.objects.unlink(obj)
+                    root_collection.link(obj)
+
+            if "_part_" in obj.name:
+                display_msg_box(
+                    "The collision model you're trying to split up already has '_part_' in its name, indicating that it's already been split up.\nRename the mesh object first and try again.", "Error", "ERROR")
+                return {'FINISHED'}
 
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.mode_set(mode='EDIT')
@@ -789,6 +798,7 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bpy.ops.mesh.quads_convert_to_tris(
                 quad_method='BEAUTY', ngon_method='BEAUTY')
             bpy.ops.mesh.convex_hull(join_triangles=False)
+            bpy.ops.mesh.normals_make_consistent(inside=False)
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
 
