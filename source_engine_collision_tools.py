@@ -4,12 +4,13 @@ from bpy.utils import(register_class, unregister_class)
 from bpy.types import(Panel, PropertyGroup)
 from bpy.props import(StringProperty,
                       FloatProperty, BoolProperty)
+import re
 
 bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (0, 4),
+    "version": (0, 5),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -31,9 +32,7 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
     Distance_Modifier: bpy.props.FloatProperty(
         name="Distance Modifier", description="Affects the distance at which hulls can be merged. Default will work in most cases. A higher number will result in more hulls merging together, but at the cost of accuracy", soft_min=0.01, max=50, default=10)
     Thin_Threshold: bpy.props.FloatProperty(
-        name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.001, max=.5, default=.015)
-    Thin_Linked: bpy.props.BoolProperty(
-        name="Linked", description="If enabled, any faces that are linked/connected to the thin faces will also be removed. Leave enabled if you're trying to clean up an existing collision model. Only disable this setting if you want to use Remove Thin Faces on the original non-collision model prior to actually generating the collision.", default=True)
+        name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.0001, max=.5, default=.01)
     Thin_Collapse: bpy.props.BoolProperty(
         name="Collapse", description="If enabled, faces will not be deleted, but instead will be collapsed in-place, preventing holes in geometry", default=True)
     QC_Folder: bpy.props.StringProperty(
@@ -42,6 +41,8 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         name="Models Path", subtype="DIR_PATH", description="Path of the folder where your compiled models are stored in the Source Engine game directory (ie. the path in $modelname, but without the model name)", default="mymodels\\", maxlen=1024)
     QC_Src_Mats_Dir: bpy.props.StringProperty(
         name="Materials Path", subtype="DIR_PATH", description="Path of the folder where your VMT and VTF files are stored in the Source Engine game directory (ie. the $cdmaterials path)", default="models\mymodels\\", maxlen=1024)
+    VMF_File: bpy.props.StringProperty(
+        name="VMF File", subtype="FILE_PATH", description="Path of the VMF map file, created in Hammer or some other mapping tool' ", default="", maxlen=1024)
 
 # FUNCTION DEFINITIONS
 
@@ -141,14 +142,17 @@ def generate_SMD_lines():
     return empty_SMD_lines
 
 
-def generate_QC_lines(obj, qc_dir, models_dir, mats_dir):
+def generate_QC_lines(obj, models_dir, mats_dir):
     QC_template = list()
     QC_template.append(f'$modelname "{models_dir}{obj.name}.mdl"\n')
     QC_template.append(f'$body {obj.name} "Empty.smd"\n')
     QC_template.append('$surfaceprop default\n')
     QC_template.append(f'$cdmaterials "{mats_dir}"\n')
     QC_template.append('$sequence ref "Empty.smd"\n')
-    QC_template.append(f'$collisionmodel "{obj.name}.smd"'+' {$concave}\n')
+    QC_template.append(f'$collisionmodel "{obj.name}.smd"\n')
+    QC_template.append('{\n')
+    QC_template.append('\t$concave\n')
+    QC_template.append('}\n')
     return QC_template
 
 # Generate Collision Mesh operator
@@ -370,7 +374,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
                 new_group_obj = bpy.context.selected_objects[0]
 
                 bpy.context.view_layer.objects.active = new_group_obj
-                new_group_obj.name = original_name + "_part_" + str(i)
+                new_group_obj.name = original_name + "_part_" + str(i).zfill(3)
 
                 # Check if collection for this hull already exists. If not, create it
                 if new_group_obj.name not in bpy.data.collections.keys():
@@ -639,7 +643,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
 
 class Cleanup_RemoveThinFaces(bpy.types.Operator):
-    """Removes any polygons that are smaller than the average face area in the model. Thin Threshold sets just how much smaller each face must be for it to be deleted. WARNING: Can't undo this"""
+    """Removes polygons that are smaller than the model's average face area, based on the Thin Threshold setting. If using this on a collision mesh, you should use Force Convex on it afterward"""
     bl_idname = "object.src_eng_cleanup_remove_thin_faces"
     bl_label = "Remove Thin Faces"
     bl_options = {'REGISTER'}
@@ -649,7 +653,6 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
             obj = bpy.context.active_object
             faces = obj.data.polygons
             area_threshold = bpy.context.scene.SrcEngCollProperties.Thin_Threshold
-            affect_linked = bpy.context.scene.SrcEngCollProperties.Thin_Linked
             collapse = bpy.context.scene.SrcEngCollProperties.Thin_Collapse
             cumulative_area = 0
 
@@ -681,11 +684,7 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
                 bpy.ops.mesh.edge_collapse()
                 bpy.ops.mesh.select_mode(
                     use_extend=False, use_expand=False, type='VERT')
-                if affect_linked:
-                    bpy.ops.mesh.select_linked(delimit=set())
             else:
-                if affect_linked:
-                    bpy.ops.mesh.select_linked(delimit=set())
                 bpy.ops.mesh.delete(type='FACE')
 
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -715,18 +714,6 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
 
-            # Remove non-manifolds first
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_non_manifold()
-            bpy.ops.mesh.select_linked(delimit=set())
-            bpy.ops.mesh.delete(type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_mode(type='FACE')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.shade_smooth()
-
             # Select all hulls and separate them into separate objects
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.select_all(action='SELECT')
@@ -739,6 +726,8 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bpy.ops.mesh.quads_convert_to_tris(
                 quad_method='BEAUTY', ngon_method='BEAUTY')
             bpy.ops.mesh.convex_hull(join_triangles=False)
+            bpy.ops.mesh.select_mode(
+                use_extend=False, use_expand=False, type='VERT')
             bpy.ops.mesh.dissolve_limited()  # angle_limit = 0.174533 is same as '10 degrees'
             bpy.ops.mesh.quads_convert_to_tris(
                 quad_method='BEAUTY', ngon_method='BEAUTY')
@@ -751,6 +740,16 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bpy.context.active_object.name = original_name
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
+            bpy.ops.object.shade_smooth()
+
+            # Remove non-manifolds
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_mode(
+                use_extend=False, use_expand=False, type='VERT')
+            bpy.ops.mesh.select_non_manifold()
+            bpy.ops.mesh.select_linked(delimit=set())
+            bpy.ops.mesh.delete(type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
 
         return {'FINISHED'}
 
@@ -801,7 +800,7 @@ class GenerateSourceQC(bpy.types.Operator):
             for obj in objs:
                 with open(f"{QC_folder}{obj.name}.qc", 'w') as qc_file:
                     qc_file.writelines(generate_QC_lines(
-                        obj, QC_folder, models_dir, mats_dir))
+                        obj, models_dir, mats_dir))
 
             # Generate empty placeholder SMD
             with open(QC_folder + "Empty.smd", 'w') as empty_smd_file:
@@ -812,7 +811,7 @@ class GenerateSourceQC(bpy.types.Operator):
 
         return {'FINISHED'}
 
-# Generate Source Engine QC
+# Recommended Settings button
 
 
 class RecommendedCollSettings(bpy.types.Operator):
@@ -844,8 +843,132 @@ class RecommendedCollSettings(bpy.types.Operator):
 
         return {'FINISHED'}
 
+# Generate Source Engine QC
+
+
+class UpdateVMF(bpy.types.Operator):
+    """Automatically adds any split-up (ie. mymodel_part_000.mdl) collision models in the 'Collision Models' collection to the VMF, if they aren't already contained in it. IMPORTANT: The first part, '_part_000.mdl' must be added manually to VMF"""
+    bl_idname = "object.src_eng_vmf_update"
+    bl_label = "Update VMF"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+
+        if check_for_selected() == True:
+            VMF_path = bpy.path.abspath(
+                bpy.context.scene.SrcEngCollProperties.VMF_File)
+
+           # Get the Collision Models collection
+            root_collection = None
+            if 'Collision Models' in bpy.data.collections.keys():
+                if len(bpy.data.collections["Collision Models"].all_objects) > 0:
+                    root_collection = bpy.data.collections['Collision Models']
+                else:
+                    display_msg_box(
+                        "There are no collision models in the 'Collision Models' collection. Place your collision models there first", "Error", "ERROR")
+            else:
+                display_msg_box(
+                    "There is no 'Collision Models' collection. Please create one with that exact name, and then place your collision models inside it", "Error", "ERROR")
+            if root_collection == None:
+                return {'FINISHED'}
+
+            # Get list of all objects in the Collision Models collection
+            objs = [
+                obj.name for obj in root_collection.all_objects if "_part_" in obj.name]
+            objs.sort()
+
+            print("Opening VMF file at: " + VMF_path)
+            # Open VMF file for reading and parse data
+            with open(VMF_path, 'r+') as vmf_file:
+
+                total_length = len(vmf_file.readlines())
+
+                print(str(total_length) + " lines loaded from VMF file.")
+                vmf_file.seek(0)
+
+                contents = vmf_file.read()
+
+                # Make sure it's a real VMF file first
+                if "versioninfo" not in contents[0:30]:
+                    display_msg_box(
+                        "Please select a valid VMF file and try again", "Error", "ERROR")
+                    return {'FINISHED'}
+
+                # Setup Regex
+                entities_regex = r'\n^[a-z_]+\n\{\n(?:.*?)^(?:\})'
+                part_zero_regex = r'(?!:/)[a-z_]*(?:_part_000)'
+                id_regex = r'\t\"id\" \"\d+\"'
+
+                # Parse VMF for entities
+                entities = re.findall(
+                    entities_regex, contents, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+                print(str(len(entities)) +
+                      " entities were found in the VMF.")
+
+                parts_zero_found = list()
+                i = 0
+
+                # Scan entity list for needed data
+                for ent in entities:
+
+                    # Look for any _part_0.mdl
+                    part_zero_found = re.search(part_zero_regex, ent, re.IGNORECASE |
+                                                re.MULTILINE | re.DOTALL)
+                    if part_zero_found:
+                        parts_zero_found.append(
+                            (i, part_zero_found.group()))
+
+                    i += 1
+
+                new_entities_to_add = set()
+
+                # For every _part_000 that was found...
+                for part in parts_zero_found:
+                    root = part[1][0:-3]
+                    entity_index = part[0]
+                    matching_objs = set([o for o in objs if root in o])
+
+                    # For every matched Blender object
+                    for matched in matching_objs:
+
+                        # Check if the matched object exists in the VMF already
+                        if matched not in contents:
+
+                            old_entity = str(entities[entity_index])
+
+                            # Add new part number
+                            new_entity = old_entity.replace(
+                                "_part_000", "_part_" + matched[-3:])
+
+                            # Remove old entity ID. Hammer will automatically assign a new one
+                            old_id = re.search(id_regex, new_entity, re.IGNORECASE |
+                                               re.MULTILINE | re.DOTALL)
+                            old_id = old_id.group()
+                            new_entity = new_entity.replace(old_id, "")
+
+                            new_entities_to_add.add(new_entity)
+                        else:
+                            continue
+
+                new_entities_to_add = list(new_entities_to_add)
+                new_entities_to_add.sort()
+                if len(new_entities_to_add) > 0:
+                    # Write new entities
+                    vmf_file.seek(0, 2)
+                    vmf_file.write("\n")
+                    vmf_file.writelines(new_entities_to_add)
+                    vmf_file.write("\n")
+                    vmf_file.close()
+                    display_msg_box(
+                        "VMF file modified successfully\n"+f"Added {str(len(new_entities_to_add))} new entities to VMF.", "Info", "INFO")
+                else:
+                    display_msg_box(
+                        "VMF is already up-to-date", "Info", "INFO")
+
+        return {'FINISHED'}
 
 # End classes
+
 
 ops = (
     GenerateSrcCollision,
@@ -854,7 +977,10 @@ ops = (
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinFaces,
     Cleanup_ForceConvex,
-    RecommendedCollSettings
+    RecommendedCollSettings,
+    UpdateVMF
+
+
 )
 
 
@@ -914,11 +1040,9 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup3_Label = boxCleanup.row()
         rowCleanup3 = boxCleanup.row()
         rowCleanup4 = boxCleanup.row()
+        rowCleanup5_Label = boxCleanup.row()
         rowCleanup5 = boxCleanup.row()
         boxCleanup.separator()
-        rowCleanup6_Label = boxCleanup.row()
-        rowCleanup6 = boxCleanup.row()
-        rowCleanup7 = boxCleanup.row()
 
         rowCleanup1_Label.label(text="Similarity")
         rowCleanup1.prop(
@@ -930,14 +1054,11 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup3_Label.label(text="Thinness")
         rowCleanup3.prop(
             bpy.context.scene.SrcEngCollProperties, "Thin_Threshold")
-        rowCleanup4.prop(bpy.context.scene.SrcEngCollProperties, "Thin_Linked")
-        rowCleanup4.prop(
+        rowCleanup3.prop(
             bpy.context.scene.SrcEngCollProperties, "Thin_Collapse")
-        rowCleanup5.operator("object.src_eng_cleanup_remove_thin_faces")
-        rowCleanup6.label(text="")
-
-        rowCleanup7.label(text="Other")
-        rowCleanup7.operator("object.src_eng_cleanup_force_convex")
+        rowCleanup4.operator("object.src_eng_cleanup_remove_thin_faces")
+        rowCleanup5_Label.label(text="Other")
+        rowCleanup5.operator("object.src_eng_cleanup_force_convex")
 
         # Compile / QC UI
         boxQC = row6.box()
@@ -946,6 +1067,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowQC2 = boxQC.row()
         rowQC3 = boxQC.row()
         rowQC4 = boxQC.row()
+        rowQC5 = boxQC.row()
+        rowQC6 = boxQC.row()
 
         rowQC1.prop(bpy.context.scene.SrcEngCollProperties, "QC_Folder")
         rowQC2.prop(bpy.context.scene.SrcEngCollProperties,
@@ -954,9 +1077,13 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowQC4.enabled = len(bpy.context.scene.SrcEngCollProperties.QC_Folder) > 0 and len(
             bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir) > 0 and len(bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir) > 0
         rowQC4.operator("object.src_eng_qc")
-
+        rowQC5.prop(bpy.context.scene.SrcEngCollProperties, "VMF_File")
+        rowQC6.operator("object.src_eng_vmf_update")
+        rowQC6.enabled = len(
+            bpy.context.scene.SrcEngCollProperties.VMF_File) > 0
 
 # End of classes
+
 
 classes = (
     SrcEngCollGen_Panel,
@@ -967,7 +1094,8 @@ classes = (
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinFaces,
     Cleanup_ForceConvex,
-    RecommendedCollSettings
+    RecommendedCollSettings,
+    UpdateVMF
 )
 
 
