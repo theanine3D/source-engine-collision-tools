@@ -147,6 +147,7 @@ def generate_QC_lines(obj, models_dir, mats_dir):
     QC_template.append(f'$modelname "{models_dir}{obj.name}.mdl"\n')
     QC_template.append(f'$body {obj.name} "Empty.smd"\n')
     QC_template.append('$surfaceprop default\n')
+    QC_template.append('$staticprop\n')
     QC_template.append(f'$cdmaterials "{mats_dir}"\n')
     QC_template.append('$sequence ref "Empty.smd"\n')
     QC_template.append(f'$collisionmodel "{obj.name}.smd"\n')
