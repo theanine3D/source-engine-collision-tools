@@ -708,7 +708,7 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             # Make sure no faces are selected
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.reveal()
-            bpy.ops.mesh.select_mode(type='FACE')
+            bpy.ops.mesh.select_mode(type='VERT')
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.transform_apply(
@@ -746,10 +746,12 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.select_mode(
                 use_extend=False, use_expand=False, type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.mesh.select_non_manifold()
             bpy.ops.mesh.select_linked(delimit=set())
             bpy.ops.mesh.delete(type='VERT')
             bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
 
         return {'FINISHED'}
 
