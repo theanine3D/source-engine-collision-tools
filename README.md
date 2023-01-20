@@ -10,6 +10,8 @@ All features are customizeable and can be tweaked via optional settings. There i
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
 - **Force Convex** - Forces all existing hulls in a collision model to be convex. Can be run after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
+- **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map. The very first part, ending in "_part_000.mdl", must already be in the VMF somewhere (such as in a prop-static), so it can be used as a template for all the other parts.
+
 
 ## Installation
 1. For the newest, bleeding edge version, download [source_engine_collision_tools.py](https://github.com/theanine3D/source-engine-collision-tools/raw/main/source_engine_collision_tools.py) (right click this link and Save As...) If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
@@ -25,7 +27,7 @@ All features are customizeable and can be tweaked via optional settings. There i
 
 ## Previews ##
 ### Interface ###
-![image](https://user-images.githubusercontent.com/88953117/213289952-681acd91-0bd2-4684-96c6-c51c4eaa15bd.png)
+![image](https://user-images.githubusercontent.com/88953117/213596970-103b5d5e-6dbc-4670-aa92-a0c377b48ca5.png)
 ### Automatic Collision Generation
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
 ### Merge Adjacent Similars ###
