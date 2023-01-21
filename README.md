@@ -9,7 +9,7 @@ All features are customizeable and can be tweaked via optional settings. There i
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model.
 - **Remove Thin Faces** - Removes any polygons that are significantly smaller than the average face area in the model.
 - **Force Convex** - Forces all existing hulls in a collision model to be convex. Can be run after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
-- **Remove Inside Hulls** - Removes any hulls that are completely buried inside other hulls.
+- **Remove Inside Hulls** - Removes any hulls that are completely or almost completely buried inside other hulls.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
 - **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map. 
 
