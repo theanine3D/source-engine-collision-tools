@@ -34,7 +34,7 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
     Thin_Threshold: bpy.props.FloatProperty(
         name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.0001, max=.5, default=.01)
     Thin_Collapse: bpy.props.BoolProperty(
-        name="Collapse", description="If enabled, faces will not be deleted, but instead will be collapsed in-place, preventing holes in geometry", default=True)
+        name="Collapse", description="If enabled, thin faces will not be deleted, but instead will be collapsed in-place, preventing holes in geometry", default=True)
     QC_Folder: bpy.props.StringProperty(
         name="QC Folder", subtype="DIR_PATH", description="Full path of the folder in which to save the generated QCs", default="//export//phys//", maxlen=1024)
     QC_Src_Models_Dir: bpy.props.StringProperty(
