@@ -397,7 +397,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             bm_processed = bmesh.new()
 
             bm.from_mesh(me)
-            hulls = [island for island in bmesh_get_hulls(
+            hulls = [hull for hull in bmesh_get_hulls(
                 bm, verts=bm.verts)]
             print(me.name, "Hulls to process:", len(hulls))
 
@@ -419,7 +419,7 @@ class GenerateSrcCollision(bpy.types.Operator):
 
                 # TODO: this operator seems to make the mesh disappear for some reason. For now, it's commented out
                 # bmesh.ops.dissolve_limit(
-                #     bm_hull, angle_limit=0.08726646, verts=bm_hull.verts, edges=bm_hull.edges)
+                #     bm_hull, angle_limit=0.08726646, use_dissolve_boundaries=False, verts=bm_hull.verts, edges=bm_hull.edges, delimit={'NORMAL'})
                 bmesh.ops.triangulate(
                     bm_hull, faces=bm_hull.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
 
@@ -866,7 +866,9 @@ class Cleanup_ForceConvex(bpy.types.Operator):
     def execute(self, context):
         if check_for_selected():
 
-            original_name = bpy.context.active_object.name
+            obj = bpy.context.active_object
+            original_name = obj.name
+            total_hull_count = 0
 
             # Make sure no faces are selected
             bpy.ops.object.mode_set(mode='EDIT')
@@ -880,27 +882,64 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             # Select all hulls and separate them into separate objects
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.separate(type='LOOSE')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='SELECT')
-
-            # Force convex
+            bpy.ops.mesh.dissolve_limited(
+                angle_limit=0.0872665, delimit={'NORMAL'})
             bpy.ops.mesh.quads_convert_to_tris(
                 quad_method='BEAUTY', ngon_method='BEAUTY')
-            bpy.ops.mesh.convex_hull(join_triangles=False)
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.dissolve_limited()  # angle_limit = 0.174533 is same as '10 degrees'
-            bpy.ops.mesh.quads_convert_to_tris(
-                quad_method='BEAUTY', ngon_method='BEAUTY')
-            bpy.ops.mesh.convex_hull(join_triangles=False)
             bpy.ops.mesh.normals_make_consistent(inside=False)
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
 
+            # Begin Bmesh processing
+            me = obj.data
+            bm = bmesh.new()
+            bm_processed = bmesh.new()
+
+            bm.from_mesh(me)
+            hulls = [hull for hull in bmesh_get_hulls(
+                bm, verts=bm.verts)]
+            print(me.name, "Hulls to process:", len(hulls))
+
+            # Create individual hull bmeshes
+            for hull in hulls:
+                bm_hull = bmesh.new()
+
+                # Add vertices to individual bmesh hull
+                for vert in hull:
+                    bmesh.ops.create_vert(bm_hull, co=vert.co)
+
+                # Generate convex hull
+                ch = bmesh.ops.convex_hull(
+                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                bmesh.ops.delete(
+                    bm_hull,
+                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                    context='VERTS')
+
+                bmesh.ops.triangulate(
+                    bm_hull, faces=bm_hull.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
+
+                ch2 = bmesh.ops.convex_hull(
+                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                bmesh.ops.delete(
+                    bm_hull,
+                    geom=list(set(ch2["geom_unused"] + ch2["geom_interior"])),
+                    context='VERTS')
+
+                # Add the processed hull to the new main object, which will store all of them
+                bmesh_join(bm_processed, bm_hull)
+                total_hull_count += 1
+                bm_hull.clear()
+                bm_hull.free()
+
+            bm_processed.to_mesh(me)
+            me.update()
+            bm.clear()
+            bm.free()
+            bm_processed.clear()
+            bm_processed.free()
+
             # Rejoin and clean up
-            bpy.ops.object.join()
             bpy.context.active_object.name = original_name
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
@@ -915,7 +954,12 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bpy.ops.mesh.select_linked(delimit=set())
             bpy.ops.mesh.delete(type='VERT')
             bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
+            display_msg_box(
+                "Processed " + str(total_hull_count) + " hulls.", "Info", "INFO")
 
         return {'FINISHED'}
 
