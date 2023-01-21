@@ -347,7 +347,8 @@ class GenerateSrcCollision(bpy.types.Operator):
                 seam=True, sharp=True, materials=True)
 
             # Decimate and clean up mesh to minimize unnecessary hulls being generated later
-            bpy.ops.mesh.dissolve_limited()
+            bpy.ops.mesh.dissolve_limited(
+                angle_limit=0.0872665, delimit={'NORMAL'})
             bpy.ops.mesh.vert_connect_concave()
             bpy.ops.mesh.face_make_planar(repeat=20)
             bpy.ops.mesh.vert_connect_nonplanar()
@@ -475,6 +476,8 @@ class GenerateSrcCollision(bpy.types.Operator):
                 location=False, rotation=True, scale=True)
             display_msg_box(
                 "Generated collision mesh with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
+            print("Generated collision mesh with total hull count of " +
+                  str(total_hull_count) + ".")
 
         return {'FINISHED'}
 
@@ -622,8 +625,6 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 location=True, rotation=True, scale=True)
             work_obj = bpy.context.active_object
             faces = work_obj.data.polygons
-            # edges = work_obj.data.edges
-            # verts = work_obj.data.vertices
 
             while len(faces) > 0:
                 # Make sure no faces are selected first
@@ -755,7 +756,8 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 bpy.ops.mesh.quads_convert_to_tris(
                     quad_method='BEAUTY', ngon_method='BEAUTY')
                 bpy.ops.mesh.convex_hull(join_triangles=False)
-                bpy.ops.mesh.dissolve_limited()  # angle_limit = 0.174533 is same as '10 degrees'
+                bpy.ops.mesh.dissolve_limited(
+                angle_limit=0.0872665, delimit={'NORMAL'})  # angle_limit = 0.174533 is same as '10 degrees'
                 bpy.ops.mesh.quads_convert_to_tris(
                     quad_method='BEAUTY', ngon_method='BEAUTY')
                 bpy.ops.mesh.convex_hull(join_triangles=False)
@@ -1028,7 +1030,6 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
                     if len(frontfaces) == 0:
 
                         # Mark the hull for deletion if it's inside another hull
-                        print("No frontfaces found")
                         hulls_to_delete.add(inner_hull)
                     else:
                         continue
