@@ -478,6 +478,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
                     bpy.data.objects.remove(o)
             display_msg_box(
                 "Split up collision mesh into " + total_part_count + " part(s).", "Info", "INFO")
+            print("Split up collision mesh into " + total_part_count + " part(s).")
 
         return {'FINISHED'}
 
@@ -810,24 +811,7 @@ class Cleanup_ForceConvex(bpy.types.Operator):
 
         return {'FINISHED'}
 
-
-# Merge Overlapping Hulls operator
-
-class Cleanup_MergeOverlappingHulls(bpy.types.Operator):
-    """Finds hulls that are overlapping on the majority of their faces, and merges them"""
-    bl_idname = "object.src_eng_cleanup_merge_overlapping"
-    bl_label = "Merge Overlapping Hulls"
-    bl_options = {'REGISTER'}
-
-    def execute(self, context):
-
-        if check_for_selected():
-            pass
-
-        return {'FINISHED'}
-
 # Remove Inside Hulls operator
-
 
 class Cleanup_RemoveInsideHulls(bpy.types.Operator):
     """Removes hulls that are (entirely or mostly) inside other hulls"""
@@ -915,6 +899,7 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
 
             display_msg_box(
                 "Removed " + amount_to_remove + " hull(s).", "Info", "INFO")
+            print("Removed " + amount_to_remove + " hull(s).")
 
         return {'FINISHED'}
 
@@ -1142,7 +1127,6 @@ ops = (
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinFaces,
     Cleanup_ForceConvex,
-    Cleanup_MergeOverlappingHulls,
     Cleanup_RemoveInsideHulls,
     RecommendedCollSettings,
     UpdateVMF
@@ -1208,7 +1192,6 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup5_Label = boxCleanup.row()
         rowCleanup5 = boxCleanup.row()
         rowCleanup6 = boxCleanup.row()
-        rowCleanup7 = boxCleanup.row()
         boxCleanup.separator()
 
         rowCleanup1_Label.label(text="Similarity")
@@ -1227,7 +1210,6 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup5_Label.label(text="Other")
         rowCleanup5.operator("object.src_eng_cleanup_force_convex")
         rowCleanup6.operator("object.src_eng_cleanup_remove_inside")
-        # rowCleanup7.operator("object.src_eng_cleanup_merge_overlapping")
 
         # Compile / QC UI
         boxQC = row6.box()
@@ -1264,7 +1246,6 @@ classes = (
     Cleanup_RemoveThinFaces,
     Cleanup_ForceConvex,
     Cleanup_RemoveInsideHulls,
-    Cleanup_MergeOverlappingHulls,
     RecommendedCollSettings,
     UpdateVMF
 )
