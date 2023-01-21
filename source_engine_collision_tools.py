@@ -10,7 +10,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (0, 5),
+    "version": (0, 6),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -63,22 +63,22 @@ def display_msg_box(message="", title="Info", icon='INFO'):
 def check_for_selected(verbose=True):
 
     # Check if any objects are selected.
-    if len(bpy.context.selected_objects) > 0 and len(bpy.context.selected_objects) < 2:
+    if len(bpy.context.selected_objects) == 1:
         if bpy.context.active_object != None:
             if bpy.context.active_object.type == "MESH":
                 return True
             else:
-                if verbose == True:
+                if verbose:
                     display_msg_box(
                         "There is no active mesh object. Click on one and try again", "Error", "ERROR")
                 return False
         else:
-            if verbose == True:
+            if verbose:
                 display_msg_box(
                     "There is no active mesh object. Click on one and try again", "Error", "ERROR")
             return False
     else:
-        if verbose == True:
+        if verbose:
             display_msg_box(
                 "One mesh object must be selected and set as active", "Error", "ERROR")
         return False
@@ -222,8 +222,8 @@ class GenerateSrcCollision(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected() == True:
-
+        if check_for_selected():
+            total_hull_count = 0
             root_collection = None
             if 'Collision Models' in bpy.data.collections.keys():
                 root_collection = bpy.data.collections['Collision Models']
@@ -339,6 +339,7 @@ class GenerateSrcCollision(bpy.types.Operator):
 
             # Recombine into one object
             bpy.ops.object.mode_set(mode='OBJECT')
+            total_hull_count = str(len(bpy.context.selected_objects))
             bpy.ops.object.join()
             obj_phys.name = obj.name + "_phys"
 
@@ -365,6 +366,8 @@ class GenerateSrcCollision(bpy.types.Operator):
             obj_phys.dimensions = original_dimensions
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
+            display_msg_box(
+                "Generated collision mesh with total hull count of " + total_hull_count + ".", "Info", "INFO")
 
         return {'FINISHED'}
 
@@ -379,8 +382,8 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
     def execute(self, context):
 
-        if check_for_selected() == True:
-
+        if check_for_selected():
+            total_part_count = 0
             root_collection = None
             if 'Collision Models' in bpy.data.collections.keys():
                 root_collection = bpy.data.collections['Collision Models']
@@ -395,13 +398,13 @@ class SplitUpSrcCollision(bpy.types.Operator):
             obj_collections = [
                 c for c in bpy.data.collections if obj.name in c.objects.keys()]
             for c in obj_collections:
-                if "_part_" in c:
-                    c.objects.unlink(obj)
-                    root_collection.link(obj)
-
+                if "_part_" in c.name:
+                    display_msg_box(
+                        "Your selected collision mesh is inside a collection with '_part_' inside the name, indicating it's already split up. Rename the collection so that it ends in '_phys', and try again.", "Error", "ERROR")
+                    return {'FINISHED'}
             if "_part_" in obj.name:
                 display_msg_box(
-                    "The collision model you're trying to split up already has '_part_' in its name, indicating that it's already been split up.\nRename the mesh object first and try again.", "Error", "ERROR")
+                    "The collision model you're trying to split up already has '_part_' in its name, indicating that it's already been split up.\nRename the mesh object first so its name ends in '_phys' and try again.", "Error", "ERROR")
                 return {'FINISHED'}
 
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -436,6 +439,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
                 bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
                 bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_axis_ortho": 'X', "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
                     False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
+                total_part_count += 1
                 bpy.ops.object.join()
                 new_group_obj = bpy.context.selected_objects[0]
 
@@ -463,6 +467,8 @@ class SplitUpSrcCollision(bpy.types.Operator):
                     break
 
             # Clean up
+            total_part_count = str(total_part_count)
+
             bpy.data.objects.remove(bpy.data.objects[original_name])
             if original_name in bpy.data.collections.keys():
                 bpy.data.collections.remove(
@@ -470,6 +476,8 @@ class SplitUpSrcCollision(bpy.types.Operator):
             for o in bpy.data.objects:
                 if (original_name + ".") in o.name:
                     bpy.data.objects.remove(o)
+            display_msg_box(
+                "Split up collision mesh into " + total_part_count + " part(s).", "Info", "INFO")
 
         return {'FINISHED'}
 
@@ -483,7 +491,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected() == True:
+        if check_for_selected():
 
             obj = bpy.context.active_object
             original_dimensions = bpy.context.active_object.dimensions
@@ -526,7 +534,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 # Store the selected face indexes
                 bpy.ops.object.mode_set(mode='OBJECT')
                 hull_face_indexes = [
-                    f.index for f in faces if f.select == True]
+                    f.index for f in faces if f.select]
                 # hull_edge_indexes = [
                 #     e.index for e in edges if e.select == True]
                 # hull_vert_indexes = [
@@ -545,27 +553,19 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 bpy.ops.object.origin_set(
                     type='ORIGIN_GEOMETRY', center='MEDIAN')
 
-                hull_dimensions = bpy.context.active_object.dimensions
-                hull_bound_box = bpy.context.active_object.bound_box
-                x_coords = list()
-                y_coords = list()
-                z_coords = list()
-
-                for v in hull_bound_box:
-                    # Convert the bounding box to world coordinates
-                    v = measurement_obj.matrix_world @ Vector(v)
-                    v = Vector(v)
-                    x_coords.append(v[0])
-                    y_coords.append(v[1])
-                    z_coords.append(v[2])
-
                 # Store the min and max coords (adding/substracting the hull dimensions x 2.5)
-                x_bounds = [min(x_coords) - (hull_dimensions[0] * 2.5),
-                            max(x_coords) + (hull_dimensions[0] * 2.5)]
-                y_bounds = [min(y_coords) - (hull_dimensions[1] * 2.5),
-                            max(y_coords) + (hull_dimensions[1] * 2.5)]
-                z_bounds = [min(z_coords) - (hull_dimensions[2] * 2.5),
-                            max(z_coords) + (hull_dimensions[2] * 2.5)]
+                hull_dimensions = measurement_obj.dimensions
+                hull_bbox_min = measurement_obj.matrix_world @ Vector(
+                    measurement_obj.bound_box[0])
+                hull_bbox_max = measurement_obj.matrix_world @ Vector(
+                    measurement_obj.bound_box[6])
+
+                x_bounds = [hull_bbox_min[0] - (hull_dimensions[0] * 2.5),
+                            hull_bbox_max[0] + (hull_dimensions[0] * 2.5)]
+                y_bounds = [hull_bbox_min[1] - (hull_dimensions[1] * 2.5),
+                            hull_bbox_max[1] + (hull_dimensions[1] * 2.5)]
+                z_bounds = [hull_bbox_min[2] - (hull_dimensions[2] * 2.5),
+                            hull_bbox_max[2] + (hull_dimensions[2] * 2.5)]
 
                 # Delete the measurement copy and re-select the original work copy
                 bpy.data.objects.remove(measurement_obj)
@@ -592,28 +592,16 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 # Store the selected face indexes
                 bpy.ops.object.mode_set(mode='OBJECT')
                 selected_face_indexes = [
-                    f.index for f in faces if f.select == True]
+                    f.index for f in faces if f.select]
 
                 # Check if each face center is within the boundaries of the bound box (x 2.5).
                 for i in selected_face_indexes:
-                    center = faces[i].center
+                    center = work_obj.matrix_world @ faces[i].center
                     if center[0] < x_bounds[0] or center[0] > x_bounds[1]:
-                        selected_face_indexes.remove(i)
-                        continue
-                    if center[1] < y_bounds[0] or center[1] > y_bounds[1]:
-                        selected_face_indexes.remove(i)
-                        continue
-                    if center[2] < z_bounds[0] or center[2] > z_bounds[1]:
-                        selected_face_indexes.remove(i)
-                        continue
-
-                # for i in selected_edge_indexes:
-                #     for v in edges[i].vertices:
-                #         if verts[v].co[0] < x_bounds[0] or verts[v].co[0] > x_bounds[1] or verts[v].co[1] < y_bounds[0] or verts[v].co[1] > y_bounds[1] or verts[v].co[2] < z_bounds[0] or verts[v].co[2] > z_bounds[1]:
-                #             edges[i].select = False
-                # for v in selected_vert_indexes:
-                #     if verts[v].co[0] < x_bounds[0] or verts[v].co[0] > x_bounds[1] or verts[v].co[1] < y_bounds[0] or verts[v].co[1] > y_bounds[1] or verts[v].co[2] < z_bounds[0] or verts[v].co[2] > z_bounds[1]:
-                #         edges[i].select = False
+                        if center[1] < y_bounds[0] or center[1] > y_bounds[1]:
+                            if center[2] < z_bounds[0] or center[2] > z_bounds[1]:
+                                selected_face_indexes.remove(i)
+                                continue
 
                 bpy.ops.object.mode_set(mode='EDIT')
                 bpy.ops.mesh.select_mode(type='VERT')
@@ -715,7 +703,7 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected() == True:
+        if check_for_selected():
             obj = bpy.context.active_object
             faces = obj.data.polygons
             area_threshold = bpy.context.scene.SrcEngCollProperties.Thin_Threshold
@@ -746,7 +734,7 @@ class Cleanup_RemoveThinFaces(bpy.types.Operator):
 
             bpy.ops.object.mode_set(mode='EDIT')
 
-            if collapse == True:
+            if collapse:
                 bpy.ops.mesh.edge_collapse()
                 bpy.ops.mesh.select_mode(
                     use_extend=False, use_expand=False, type='VERT')
@@ -767,7 +755,7 @@ class Cleanup_ForceConvex(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected() == True:
+        if check_for_selected():
 
             original_name = bpy.context.active_object.name
 
@@ -822,6 +810,114 @@ class Cleanup_ForceConvex(bpy.types.Operator):
 
         return {'FINISHED'}
 
+
+# Merge Overlapping Hulls operator
+
+class Cleanup_MergeOverlappingHulls(bpy.types.Operator):
+    """Finds hulls that are overlapping on the majority of their faces, and merges them"""
+    bl_idname = "object.src_eng_cleanup_merge_overlapping"
+    bl_label = "Merge Overlapping Hulls"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+
+        if check_for_selected():
+            pass
+
+        return {'FINISHED'}
+
+# Remove Inside Hulls operator
+
+
+class Cleanup_RemoveInsideHulls(bpy.types.Operator):
+    """Removes hulls that are (entirely or mostly) inside other hulls"""
+    bl_idname = "object.src_eng_cleanup_remove_inside"
+    bl_label = "Remove Inside Hulls"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+
+        if check_for_selected():
+
+            original_name = bpy.context.active_object.name
+            # Make sure no faces are selected
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.reveal()
+            bpy.ops.mesh.select_mode(type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Select all hulls and separate them into separate objects
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.separate(type='LOOSE')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
+
+            hulls = [o for o in bpy.context.selected_objects]
+            hulls_to_delete = set()
+
+            for outer_hull in hulls:
+
+                # Get bounding box lowest and highest vertices - to check if inner hull is inside it later
+                hull_bbox_min = outer_hull.matrix_world @ Vector(
+                    outer_hull.bound_box[0])
+                hull_bbox_max = outer_hull.matrix_world @ Vector(
+                    outer_hull.bound_box[6])
+
+                def check_inside_bbox(h):
+                    loc = h.location
+                    if hull_bbox_min[0] < loc[0] and hull_bbox_max[0] > loc[0]:
+                        if hull_bbox_min[1] < loc[1] and hull_bbox_max[1] > loc[1]:
+                            if hull_bbox_min[2] < loc[2] and hull_bbox_max[2] > loc[2]:
+                                return True
+                    else:
+                        return False
+
+                # Create list of hulls that are smalller than this hull and within the outer hull's bounding box
+                hulls_to_check = [h for h in hulls if h != outer_hull and h.dimensions <
+                                  outer_hull.dimensions and check_inside_bbox(h)]
+
+                for inner_hull in hulls_to_check:
+                    inner_hull_loc = inner_hull.location
+                    outer_hull_faces = outer_hull.data.polygons
+
+                    # This returns a list of frontface indices. Backfaces are not included
+                    frontfaces = [f.index for f in outer_hull_faces if f.normal.dot(
+                        inner_hull_loc - (outer_hull.matrix_world @ f.center)) > 0]
+
+                    # Zero length means no frontfaces were visible - aka inner hull truly is inside outer hull
+                    if len(frontfaces) == 0:
+
+                        # Mark the hull for deletion if it's inside another hull
+                        print("No frontfaces found")
+                        hulls_to_delete.add(inner_hull)
+                    else:
+                        continue
+
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            amount_to_remove = str(len(hulls_to_delete))
+
+            # Remove marked hulls
+            for h in hulls_to_delete:
+                bpy.data.objects.remove(h)
+
+            # Rejoin and clean up
+            bpy.ops.object.join()
+            bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+
+            bpy.context.active_object.name = original_name
+            bpy.ops.object.transform_apply(
+                location=False, rotation=True, scale=True)
+            bpy.ops.object.shade_smooth()
+
+            display_msg_box(
+                "Removed " + amount_to_remove + " hull(s).", "Info", "INFO")
+
+        return {'FINISHED'}
+
 # Generate Source Engine QC
 
 
@@ -833,7 +929,7 @@ class GenerateSourceQC(bpy.types.Operator):
 
     def execute(self, context):
 
-        if check_for_selected() == True:
+        if check_for_selected():
             QC_folder = bpy.path.abspath(
                 bpy.context.scene.SrcEngCollProperties.QC_Folder)
             models_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir
@@ -891,7 +987,7 @@ class RecommendedCollSettings(bpy.types.Operator):
 
     def execute(self, context):
 
-        if check_for_selected() == True:
+        if check_for_selected():
 
             obj = bpy.context.active_object
 
@@ -912,7 +1008,7 @@ class RecommendedCollSettings(bpy.types.Operator):
 
         return {'FINISHED'}
 
-# Generate Source Engine QC
+# Update VMF operator
 
 
 class UpdateVMF(bpy.types.Operator):
@@ -923,7 +1019,7 @@ class UpdateVMF(bpy.types.Operator):
 
     def execute(self, context):
 
-        if check_for_selected() == True:
+        if check_for_selected():
             VMF_path = bpy.path.abspath(
                 bpy.context.scene.SrcEngCollProperties.VMF_File)
 
@@ -1046,10 +1142,10 @@ ops = (
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinFaces,
     Cleanup_ForceConvex,
+    Cleanup_MergeOverlappingHulls,
+    Cleanup_RemoveInsideHulls,
     RecommendedCollSettings,
     UpdateVMF
-
-
 )
 
 
@@ -1111,6 +1207,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup4 = boxCleanup.row()
         rowCleanup5_Label = boxCleanup.row()
         rowCleanup5 = boxCleanup.row()
+        rowCleanup6 = boxCleanup.row()
+        rowCleanup7 = boxCleanup.row()
         boxCleanup.separator()
 
         rowCleanup1_Label.label(text="Similarity")
@@ -1128,6 +1226,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup4.operator("object.src_eng_cleanup_remove_thin_faces")
         rowCleanup5_Label.label(text="Other")
         rowCleanup5.operator("object.src_eng_cleanup_force_convex")
+        rowCleanup6.operator("object.src_eng_cleanup_remove_inside")
+        # rowCleanup7.operator("object.src_eng_cleanup_merge_overlapping")
 
         # Compile / QC UI
         boxQC = row6.box()
@@ -1163,6 +1263,8 @@ classes = (
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinFaces,
     Cleanup_ForceConvex,
+    Cleanup_RemoveInsideHulls,
+    Cleanup_MergeOverlappingHulls,
     RecommendedCollSettings,
     UpdateVMF
 )
