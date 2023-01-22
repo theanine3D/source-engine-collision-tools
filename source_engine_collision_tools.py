@@ -1228,9 +1228,12 @@ class UpdateVMF(bpy.types.Operator):
                         with open(VMF_path, 'w') as vmf_file:
                             vmf_file.writelines(new_entity_list)
                             vmf_file.write("\n")
+                            display_msg_box(
+                                "VMF file modified successfully\n"+f"Removed {str(removed_count)} entities from the VMF.", "Info", "INFO")
+                    else:
+                        display_msg_box(
+                            "No partitioned collision models were found in the VMF file.", "Info", "INFO")
                     vmf_file.close()
-                    display_msg_box(
-                        "VMF file modified successfully\n"+f"Removed {str(removed_count)} entities from the VMF.", "Info", "INFO")
                     return {'FINISHED'}
 
                 parts_zero_found = list()
