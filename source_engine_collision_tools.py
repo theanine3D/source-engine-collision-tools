@@ -44,6 +44,8 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         name="Materials Path", subtype="DIR_PATH", description="Path of the folder where your VMT and VTF files are stored in the Source Engine game directory (ie. the $cdmaterials path)", default="models\mymodels\\", maxlen=1024)
     VMF_File: bpy.props.StringProperty(
         name="VMF File", subtype="FILE_PATH", description="Path of the VMF map file, created in Hammer or some other mapping tool' ", default="", maxlen=1024)
+    VMF_Remove: bpy.props.BoolProperty(
+        name="Remove", description="If enabled, partitioned (ie. _part_) collision models will be REMOVED from the VMF along with their corresponding entity (ie. prop_static). Keep a backup VMF just in case", default=False)
 
 # FUNCTION DEFINITIONS
 
@@ -757,7 +759,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                     quad_method='BEAUTY', ngon_method='BEAUTY')
                 bpy.ops.mesh.convex_hull(join_triangles=False)
                 bpy.ops.mesh.dissolve_limited(
-                angle_limit=0.0872665, delimit={'NORMAL'})  # angle_limit = 0.174533 is same as '10 degrees'
+                    angle_limit=0.0872665, delimit={'NORMAL'})  # angle_limit = 0.174533 is same as '10 degrees'
                 bpy.ops.mesh.quads_convert_to_tris(
                     quad_method='BEAUTY', ngon_method='BEAUTY')
                 bpy.ops.mesh.convex_hull(join_triangles=False)
@@ -1161,6 +1163,7 @@ class UpdateVMF(bpy.types.Operator):
         if check_for_selected():
             VMF_path = bpy.path.abspath(
                 bpy.context.scene.SrcEngCollProperties.VMF_File)
+            remove_on = bpy.context.scene.SrcEngCollProperties.VMF_Remove
 
            # Get the Collision Models collection
             root_collection = None
@@ -1199,7 +1202,7 @@ class UpdateVMF(bpy.types.Operator):
                     return {'FINISHED'}
 
                 # Setup Regex
-                entities_regex = r'\n^[a-z_]+\n\{\n(?:.*?)^(?:\})'
+                entities_regex = r'^[a-z_]+\n\{\n(?:.*?)^(?:\})\n'
                 part_zero_regex = r'(?!:/)[a-z_]*(?:_part_000)'
                 id_regex = r'\t\"id\" \"\d+\"'
 
@@ -1208,6 +1211,27 @@ class UpdateVMF(bpy.types.Operator):
                     entities_regex, contents, re.IGNORECASE | re.MULTILINE | re.DOTALL)
                 print(str(len(entities)) +
                       " entities were found in the VMF.")
+
+                # If removal mode is enabled, remove entities containing _part_
+                if remove_on:
+                    new_entity_list = entities
+                    removed_count = 0
+                    for ent in entities:
+                        if "_part_" in ent:
+                            removed_count += 1
+                            print("REMOVING ENTITY:\n\n")
+                            print(ent)
+                            print("\n\n")
+                            new_entity_list.remove(ent)
+                    if removed_count > 0:
+                        vmf_file.close()
+                        with open(VMF_path, 'w') as vmf_file:
+                            vmf_file.writelines(new_entity_list)
+                            vmf_file.write("\n")
+                    vmf_file.close()
+                    display_msg_box(
+                        "VMF file modified successfully\n"+f"Removed {str(removed_count)} entities from the VMF.", "Info", "INFO")
+                    return {'FINISHED'}
 
                 parts_zero_found = list()
                 i = 0
@@ -1243,6 +1267,10 @@ class UpdateVMF(bpy.types.Operator):
                             # Add new part number
                             new_entity = old_entity.replace(
                                 "_part_000", "_part_" + matched[-3:])
+
+                            # Make sure collision is enabled in the new entity, just in case
+                            new_entity = new_entity.replace(
+                                '"solid" "0"', '"solid" "1"')
 
                             # Remove old entity ID. Hammer will automatically assign a new one
                             old_id = re.search(id_regex, new_entity, re.IGNORECASE |
@@ -1384,6 +1412,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowQC4.operator("object.src_eng_qc")
         rowQC5.prop(bpy.context.scene.SrcEngCollProperties, "VMF_File")
         rowQC6.operator("object.src_eng_vmf_update")
+        rowQC6.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Remove")
         rowQC6.enabled = len(
             bpy.context.scene.SrcEngCollProperties.VMF_File) > 0
 
