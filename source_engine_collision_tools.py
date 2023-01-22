@@ -45,7 +45,7 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
     VMF_File: bpy.props.StringProperty(
         name="VMF File", subtype="FILE_PATH", description="Path of the VMF map file, created in Hammer or some other mapping tool' ", default="", maxlen=1024)
     VMF_Remove: bpy.props.BoolProperty(
-        name="Remove", description="If enabled, partitioned (ie. _part_) collision models will be REMOVED from the VMF along with their corresponding entity (ie. prop_static). Keep a backup VMF just in case", default=False)
+        name="Remove", description="If enabled, partitioned (ie. _part_) collision models will be REMOVED from the VMF along with their corresponding entity (ie. prop_static). Can't be undone. Keep a backup VMF just in case", default=False)
 
 # FUNCTION DEFINITIONS
 
@@ -1411,8 +1411,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
             bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir) > 0 and len(bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir) > 0
         rowQC4.operator("object.src_eng_qc")
         rowQC5.prop(bpy.context.scene.SrcEngCollProperties, "VMF_File")
-        rowQC6.operator("object.src_eng_vmf_update")
         rowQC6.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Remove")
+        rowQC6.operator("object.src_eng_vmf_update")
         rowQC6.enabled = len(
             bpy.context.scene.SrcEngCollProperties.VMF_File) > 0
 
