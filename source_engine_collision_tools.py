@@ -716,9 +716,6 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                                     v[2] = round(v[2], 2)
                                 overlap = [
                                     v for v in bm1_verts if v in bm2_verts]
-                                print(str(len(overlap)) +
-                                      " overlapping vertices found:")
-                                print(str(overlap))
 
                                 # If any verts overlapped, then the hulls are adjacent!
                                 if len(overlap) > 0:
