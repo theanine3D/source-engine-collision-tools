@@ -28,7 +28,7 @@ All features are customizeable and can be tweaked via optional settings. There i
 
 ## Previews ##
 ### Interface ###
-![image](https://user-images.githubusercontent.com/88953117/213936241-1c5d6e14-db5c-4b7d-9a27-7649c4becd86.png)
+![image](https://user-images.githubusercontent.com/88953117/214202084-9a432601-4e17-4ad2-8e23-bbb4e426acd4.png)
 ### Automatic Collision Generation
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
 ### Merge Adjacent Similars ###
