@@ -11,7 +11,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (0, 6),
+    "version": (0, 7),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -26,12 +26,8 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         name="Decimate Ratio", subtype="FACTOR", description="At 1.0, decimation is disabled. Lower value = stronger decimation, resulting in less accurate but more performant collision mesh. Note: Decimation reduces effectiveness of Merge Adjacent Similars", max=1.0, min=0.0, default=1)
     Extrusion_Modifier: bpy.props.FloatProperty(
         name="Extrude Factor", description="The setting affects the extrusion of each hull. Default will work in most cases", min=0.001, soft_max=200.0, default=40.0)
-    Scale_Modifier: bpy.props.FloatProperty(
-        name="Scale Modifier", subtype="FACTOR", description="Default will work in most cases. If you see chunks of geometry missing from the generated collision model, try setting this to something lower", soft_min=-0.001, soft_max=100, default=1)
     Similar_Factor: bpy.props.FloatProperty(
-        name="Similar Factor", subtype="FACTOR", description="Similarity intensity for Merge Adjacent Similars. A higher factor will result in more hulls merging together, but at the cost of accuracy", min=0.0001, max=1.0, default=0.001)
-    Distance_Modifier: bpy.props.FloatProperty(
-        name="Distance Modifier", description="Affects the distance at which hulls can be merged. Default will work in most cases. A higher number will result in more hulls merging together, but at the cost of accuracy", soft_min=0.01, max=50, default=10)
+        name="Similar Factor", subtype="FACTOR", description="Percentage of similarity between hulls that is required in order for them to be merged together. At the default setting, hulls must be 90 percent similar in order to be merged", min=.5, max=1.0, default=.9)
     Thin_Threshold: bpy.props.FloatProperty(
         name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.0001, max=.5, default=.01)
     Thin_Collapse: bpy.props.BoolProperty(
@@ -314,7 +310,6 @@ class GenerateSrcCollision(bpy.types.Operator):
                 return {'FINISHED'}
 
             original_dimensions = obj.dimensions
-            doubles_threshold = bpy.context.scene.SrcEngCollProperties.Distance_Modifier
 
             obj_phys = None
             collection_phys = None
@@ -329,13 +324,8 @@ class GenerateSrcCollision(bpy.types.Operator):
             obj_phys = bpy.context.active_object
             obj_phys.name = obj.name + "_phys"
 
-            # Resize object, based on user setting "Scale Factor"
-            scale_modifier = bpy.context.scene.SrcEngCollProperties.Scale_Modifier
-            bpy.ops.transform.resize(value=(scale_modifier, scale_modifier, scale_modifier), orient_type='GLOBAL', orient_matrix=(
-                (1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=False, use_proportional_edit=False, snap=False)
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
-
             bpy.ops.object.shade_smooth()
             bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.reveal()
@@ -344,7 +334,7 @@ class GenerateSrcCollision(bpy.types.Operator):
                 use_extend=False, use_expand=False, type='VERT')
             bpy.ops.mesh.select_all(action='SELECT')
             bpy.ops.mesh.mark_sharp(clear=True)
-            bpy.ops.mesh.remove_doubles(threshold=doubles_threshold)
+            bpy.ops.mesh.remove_doubles()
             bpy.ops.mesh.tris_convert_to_quads(
                 seam=True, sharp=True, materials=True)
 
@@ -418,19 +408,6 @@ class GenerateSrcCollision(bpy.types.Operator):
                 bmesh.ops.delete(
                     bm_hull,
                     geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                    context='VERTS')
-
-                # TODO: this operator seems to make the mesh disappear for some reason. For now, it's commented out
-                # bmesh.ops.dissolve_limit(
-                #     bm_hull, angle_limit=0.08726646, use_dissolve_boundaries=False, verts=bm_hull.verts, edges=bm_hull.edges, delimit={'NORMAL'})
-                bmesh.ops.triangulate(
-                    bm_hull, faces=bm_hull.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
-
-                ch2 = bmesh.ops.convex_hull(
-                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                bmesh.ops.delete(
-                    bm_hull,
-                    geom=list(set(ch2["geom_unused"] + ch2["geom_interior"])),
                     context='VERTS')
 
                 # Add the processed hull to the new main object, which will store all of them
@@ -607,17 +584,13 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
     def execute(self, context):
         if check_for_selected():
 
-            obj = bpy.context.active_object
-            original_dimensions = bpy.context.active_object.dimensions
-            obj_parts = set()
-            doubles_threshold = bpy.context.scene.SrcEngCollProperties.Distance_Modifier
+            initial_hull_count = 0
+            merged_count = 0
+            work_obj = bpy.context.active_object
             similarity_threshold = bpy.context.scene.SrcEngCollProperties.Similar_Factor
 
-            # Create working copy
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.duplicate(linked=False)
-
             # Make sure no faces are selected
+            bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.reveal()
             bpy.ops.mesh.select_mode(type='FACE')
@@ -625,184 +598,207 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.transform_apply(
                 location=True, rotation=True, scale=True)
-            work_obj = bpy.context.active_object
-            faces = work_obj.data.polygons
 
-            while len(faces) > 0:
-                # Make sure no faces are selected first
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.object.mode_set(mode='OBJECT')
+            # Begin Bmesh processing
+            me = work_obj.data
+            bm = bmesh.new()
+            bm_processed = bmesh.new()
 
-                # Select the face and any linked to it
-                try:
-                    faces[len(faces)-1].select = True
-                except:
+            bm.from_mesh(me)
+            bm.verts.ensure_lookup_table()
+            bm.verts.index_update()
+
+            hulls = [hull for hull in bmesh_get_hulls(
+                bm, verts=bm.verts)]
+            print(me.name, "Hulls to process:", len(hulls))
+            hull_bm_list = list()
+
+            i = 0
+            # Create individual hull bmeshes
+            for hull in hulls:
+                bm_hull = bmesh.new()
+
+                # Add vertices to individual bmesh hull
+                for vert in hull:
+                    bmesh.ops.create_vert(bm_hull, co=vert.co)
+                bm_hull.verts.index_update()
+                bm_hull.verts.ensure_lookup_table()
+
+                # Generate convex hull
+                ch = bmesh.ops.convex_hull(
+                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
+
+                bmesh.ops.delete(
+                    bm_hull,
+                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                    context='FACES')
+
+                bmesh.ops.recalc_face_normals(bm_hull, faces=bm_hull.faces)
+
+                # Prepare for processing
+                bm_hull.verts.index_update()
+                bm_hull.edges.index_update()
+                bm_hull.faces.index_update()
+                bm_hull.verts.ensure_lookup_table()
+                bm_hull.edges.ensure_lookup_table()
+                bm_hull.faces.ensure_lookup_table()
+                bm_hull.transform(work_obj.matrix_world)
+
+                # Add to bm list as a 4-element tuple - index, bm, volume, and face count
+                hull_bm_list.append((i, bm_hull, bm_hull.calc_volume(
+                    signed=False), len(bm_hull.faces)))
+                initial_hull_count += 1
+                i += 1
+
+            if initial_hull_count == 1:
+                display_msg_box(
+                    "There is only one hull remaining in this collision mesh. Aborting...", "Info", "INFO")
+                return {'FINISHED'}
+
+            i = 0
+            # Compare hulls
+            for index1, bm1, vol1, facecount1 in hull_bm_list:
+                if index1 == None:
                     continue
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_mode(type='FACE')
-                bpy.ops.mesh.select_linked(delimit=set())
 
-                # Store the selected face indexes
-                bpy.ops.object.mode_set(mode='OBJECT')
-                hull_face_indexes = [
-                    f.index for f in faces if f.select]
-                # hull_edge_indexes = [
-                #     e.index for e in edges if e.select == True]
-                # hull_vert_indexes = [
-                #     v.index for v in verts if v.select == True]
+                for index2, bm2, vol2, facecount2 in hull_bm_list:
 
-                # Duplicate the selected faces and get dimensions + origin
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.duplicate_move(MESH_OT_duplicate={"mode": 1}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_axis_ortho": 'X', "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
-                    False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
-                bpy.ops.mesh.separate(type='SELECTED')
-                bpy.ops.object.mode_set(mode='OBJECT')
-                obj.select_set(False)
-                work_obj.select_set(False)
-                measurement_obj = bpy.context.selected_objects[0]
-                bpy.context.view_layer.objects.active = measurement_obj
-                bpy.ops.object.origin_set(
-                    type='ORIGIN_GEOMETRY', center='MEDIAN')
+                    if index2 == index1:
+                        continue
+                    if index2 == None or index1 == None:
+                        continue
 
-                # Store the min and max coords (adding/substracting the hull dimensions x 2.5)
-                hull_dimensions = measurement_obj.dimensions
-                hull_bbox_min = measurement_obj.matrix_world @ Vector(
-                    measurement_obj.bound_box[0])
-                hull_bbox_max = measurement_obj.matrix_world @ Vector(
-                    measurement_obj.bound_box[6])
+                    print("Comparing hull " + str(index1) +
+                          " with hull " + str(index2))
 
-                x_bounds = [hull_bbox_min[0] - (hull_dimensions[0] * 2.5),
-                            hull_bbox_max[0] + (hull_dimensions[0] * 2.5)]
-                y_bounds = [hull_bbox_min[1] - (hull_dimensions[1] * 2.5),
-                            hull_bbox_max[1] + (hull_dimensions[1] * 2.5)]
-                z_bounds = [hull_bbox_min[2] - (hull_dimensions[2] * 2.5),
-                            hull_bbox_max[2] + (hull_dimensions[2] * 2.5)]
+                    # Compare volumes
+                    if vol2 >= (vol1 * similarity_threshold) and vol2 <= (vol1 * (1+(1-similarity_threshold))):
 
-                # Delete the measurement copy and re-select the original work copy
-                bpy.data.objects.remove(measurement_obj)
-                work_obj.select_set(True)
-                bpy.context.view_layer.objects.active = work_obj
+                        # Compare face counts
+                        if facecount2 >= (facecount1 * similarity_threshold) and facecount2 <= (facecount1 * (1+(1-similarity_threshold))):
 
-                for i in hull_face_indexes:
-                    faces[i].select = True
+                            # Get center coordinate of both hulls
+                            bm1_origin_x = (
+                                sum(v.co[0] for v in bm2.verts)) / len(bm2.verts)
+                            bm1_origin_y = (sum(v.co[0]
+                                            for v in bm2.verts)) / 3
+                            bm1_origin_z = (sum(v.co[0]
+                                            for v in bm2.verts)) / 3
+                            bm1_origin = Vector((
+                                bm1_origin_x, bm1_origin_y, bm1_origin_z))
 
-                # Select similar (perimeter)
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_linked(delimit=set())
-                # Old method used face perimeter - but EDGE length, normal, and direction are more effective
-                # bpy.ops.mesh.select_similar(
-                #     type='PERIMETER', threshold=bpy.context.scene.SrcEngCollProperties.Similar_Factor)
-                # bpy.ops.mesh.select_similar(
-                #     type='DIR', threshold=.0001)
-                bpy.ops.mesh.select_mode(type='EDGE')
-                bpy.ops.mesh.select_similar(
-                    type='DIR', threshold=similarity_threshold)
-                bpy.ops.mesh.select_mode(type='VERT')
-                bpy.ops.mesh.select_linked(delimit=set())
+                            bm2_origin_x = (
+                                sum(v.co[0] for v in bm2.verts)) / len(bm2.verts)
+                            bm2_origin_y = (sum(v.co[0]
+                                            for v in bm2.verts)) / 3
+                            bm2_origin_z = (sum(v.co[0]
+                                            for v in bm2.verts)) / 3
+                            bm2_origin = Vector((
+                                bm2_origin_x, bm2_origin_y, bm2_origin_z))
 
-                # Store the selected face indexes
-                bpy.ops.object.mode_set(mode='OBJECT')
-                selected_face_indexes = [
-                    f.index for f in faces if f.select]
+                            # # Get distance between the two center coordinates
+                            distance = (bm1_origin - bm2_origin).length
 
-                # Check if each face center is within the boundaries of the bound box (x 2.5).
-                for i in selected_face_indexes:
-                    center = work_obj.matrix_world @ faces[i].center
-                    if center[0] < x_bounds[0] or center[0] > x_bounds[1]:
-                        if center[1] < y_bounds[0] or center[1] > y_bounds[1]:
-                            if center[2] < z_bounds[0] or center[2] > z_bounds[1]:
-                                selected_face_indexes.remove(i)
-                                continue
+                            # Check if hulls are close together
+                            if distance < ((vol1 ** (1/3)) * 2.5):
 
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_mode(type='VERT')
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.mesh.select_mode(type='FACE')
-                bpy.ops.object.mode_set(mode='OBJECT')
-                for i in selected_face_indexes:
-                    faces[i].select = True
-                bpy.ops.object.mode_set(mode='EDIT')
+                                # Check if any verts overlap
+                                bm1_verts = [list(v.co) for v in bm1.verts]
+                                bm2_verts = [list(v.co) for v in bm2.verts]
 
-                bpy.ops.mesh.select_less()
-                bpy.ops.mesh.select_less()
-                bpy.ops.mesh.select_less()
-                bpy.ops.mesh.select_less()
+                                for v in bm1_verts:
+                                    v[0] = round(v[0], 2)
+                                    v[1] = round(v[1], 2)
+                                    v[2] = round(v[2], 2)
+                                for v in bm2_verts:
+                                    v[0] = round(v[0], 2)
+                                    v[1] = round(v[1], 2)
+                                    v[2] = round(v[2], 2)
+                                overlap = [
+                                    v for v in bm1_verts if v in bm2_verts]
+                                print(str(len(overlap)) +
+                                      " overlapping vertices found:")
+                                print(str(overlap))
 
-                # Isolate the faces to their own object
-                bpy.ops.mesh.separate(type='SELECTED')
-                bpy.ops.object.mode_set(mode='OBJECT')
-                obj.select_set(False)
-                work_obj.select_set(False)
-                temp_obj = bpy.context.selected_objects[0]
-                bpy.context.view_layer.objects.active = temp_obj
+                                # If any verts overlapped, then the hulls are adjacent!
+                                if len(overlap) > 0:
 
-                # Resize object, based on user setting "Scale Factor"
-                scale_modifier = bpy.context.scene.SrcEngCollProperties.Scale_Modifier
-                bpy.ops.transform.resize(value=(scale_modifier, scale_modifier, scale_modifier), orient_type='GLOBAL', orient_matrix=(
-                    (1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=False, use_proportional_edit=False, snap=False)
-                bpy.ops.object.transform_apply(
-                    location=False, rotation=True, scale=True)
+                                    print("Merging hull " + str(index1) +
+                                          " with hull " + str(index2))
 
-                # Merge faces
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_all(action='SELECT')
-                bpy.ops.mesh.select_mode(type='VERT')
-                bpy.ops.mesh.remove_doubles(threshold=doubles_threshold)
-                bpy.ops.mesh.select_mode(type='FACE')
-                bpy.ops.mesh.separate(type='LOOSE')
+                                    new_combined_bm = bmesh.new()
+                                    new_verts = [
+                                        v for v in bm1.verts] + [v for v in bm2.verts]
+                                    for v in new_verts:
+                                        bmesh.ops.create_vert(
+                                            new_combined_bm, co=v.co)
+                                    new_combined_bm.verts.index_update()
+                                    new_combined_bm.verts.ensure_lookup_table()
 
-                bpy.ops.object.mode_set(mode='OBJECT')
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_all(action='SELECT')
-                bpy.ops.mesh.quads_convert_to_tris(
-                    quad_method='BEAUTY', ngon_method='BEAUTY')
-                bpy.ops.mesh.convex_hull(join_triangles=False)
-                bpy.ops.mesh.dissolve_limited(
-                    angle_limit=0.0872665, delimit={'NORMAL'})  # angle_limit = 0.174533 is same as '10 degrees'
-                bpy.ops.mesh.quads_convert_to_tris(
-                    quad_method='BEAUTY', ngon_method='BEAUTY')
-                bpy.ops.mesh.convex_hull(join_triangles=False)
+                                    hull_bm_list[index1] = tuple((
+                                        None, None, None, None))
+                                    bm1.clear()
+                                    bm1.free()
+                                    hull_bm_list[index2] = tuple((
+                                        None, None, None, None))
+                                    bm2.clear()
+                                    bm2.free()
 
-                # Join and store the merged hulls, so we can rejoin all merged pieces later
-                bpy.ops.object.mode_set(mode='OBJECT')
-                bpy.ops.object.join()
+                                    # Generate convex hull
+                                    ch = bmesh.ops.convex_hull(
+                                        new_combined_bm, input=new_combined_bm.verts, use_existing_faces=False)
 
-                obj_parts.add(bpy.context.active_object)
+                                    junk_geometry = list(
+                                        set(ch["geom_unused"] + ch["geom_interior"]))
+                                    bmesh.ops.delete(
+                                        new_combined_bm, geom=junk_geometry, context='VERTS')
 
-                # Deselect the piece, and reselect the main object
-                bpy.ops.object.select_all(action='DESELECT')
-                work_obj.select_set(True)
-                bpy.context.view_layer.objects.active = work_obj
+                                    # Join the hull with the main hull containing all of them
+                                    bmesh_join(bm_processed, new_combined_bm)
+                                    new_combined_bm.clear()
+                                    new_combined_bm.free()
+                                    break
 
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.transform_apply(
-                location=True, rotation=True, scale=True)
+            # Get quick count of how many hulls were merged
+            merged_count = len([h[0] for h in hull_bm_list if h[0] == None])
 
-            # Merge all the merged hull parts back into one single object
-            for part in obj_parts:
-                part.select_set(True)
-            bpy.ops.object.join()
-            new_obj = bpy.context.active_object
-            new_obj.name = obj.name
-            bpy.data.objects.remove(obj)
+            # Re-add hulls that were never merged
+            unmerged_hulls = [
+                bm_unmerged[1] for bm_unmerged in hull_bm_list if None not in bm_unmerged]
+
+            for unmerged_hull in unmerged_hulls:
+                bmesh_join(bm_processed, unmerged_hull)
+                unmerged_hull.clear()
+                unmerged_hull.free()
+
+            # Finally update mesh
+            bm_processed.to_mesh(me)
+            me.update()
+            bm.clear()
+            bm.free()
+            bm_processed.clear()
+            bm_processed.free()
+
+            # End Bmesh processing
 
             # Cleanup mesh
+            bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='INVERT')
-            bpy.ops.mesh.delete(type='FACE')
+            bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.mesh.select_mode(
                 use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_non_manifold()
-            bpy.ops.mesh.select_linked(delimit=set())
-            bpy.ops.mesh.delete(type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.shade_smooth()
 
             # Reset dimensions and apply final transforms
-            new_obj.dimensions = original_dimensions
             bpy.ops.object.transform_apply(
                 location=True, rotation=True, scale=True)
+
+            display_msg_box(
+                "Processed original " + str(initial_hull_count) + " hull(s).\nMerged " + str(merged_count) + " total hull(s).", "Info", "INFO")
+            print(
+                "Processed original " + str(initial_hull_count) + " hull(s).\nMerged " + str(merged_count) + " total hull(s).")
 
         return {'FINISHED'}
 
@@ -920,16 +916,6 @@ class Cleanup_ForceConvex(bpy.types.Operator):
                     geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
                     context='VERTS')
 
-                bmesh.ops.triangulate(
-                    bm_hull, faces=bm_hull.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
-
-                ch2 = bmesh.ops.convex_hull(
-                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                bmesh.ops.delete(
-                    bm_hull,
-                    geom=list(set(ch2["geom_unused"] + ch2["geom_interior"])),
-                    context='VERTS')
-
                 # Add the processed hull to the new main object, which will store all of them
                 bmesh_join(bm_processed, bm_hull)
                 total_hull_count += 1
@@ -942,6 +928,8 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bm.free()
             bm_processed.clear()
             bm_processed.free()
+
+            # End Bmesh processing
 
             # Rejoin and clean up
             bpy.context.active_object.name = original_name
@@ -994,7 +982,8 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
             bpy.ops.mesh.select_all(action='SELECT')
             bpy.ops.mesh.separate(type='LOOSE')
             bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
+            bpy.ops.object.origin_set(
+                type='ORIGIN_GEOMETRY', center='MEDIAN')
 
             hulls = [o for o in bpy.context.selected_objects]
             hulls_to_delete = set()
@@ -1134,18 +1123,8 @@ class RecommendedCollSettings(bpy.types.Operator):
 
             avg_length = get_avg_length(obj)
             extrude_modifier = avg_length * 0.07
-            distance_modifier = avg_length * 0.05
-            scale_modifier = 1
-
-            # For scale modifier, guideline is that average edge length must be roughly 487.4999679487 or lower
-            # for Remove Doubles to work, due to its hardcoded 50 threshold limit
-            if distance_modifier > 50.0:
-                scale_modifier = 1 / (distance_modifier/50.0)
-                distance_modifier = 50.0
 
             bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier = extrude_modifier
-            bpy.context.scene.SrcEngCollProperties.Distance_Modifier = distance_modifier
-            bpy.context.scene.SrcEngCollProperties.Scale_Modifier = scale_modifier
 
         return {'FINISHED'}
 
@@ -1359,7 +1338,6 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row0.operator("object.src_eng_recc_settings")
         row1.prop(bpy.context.scene.SrcEngCollProperties, "Decimate_Ratio")
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Extrusion_Modifier")
-        row2.prop(bpy.context.scene.SrcEngCollProperties, "Scale_Modifier")
 
         row3.operator("object.src_eng_collision")
         row4.operator("object.src_eng_split")
@@ -1382,8 +1360,6 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup1_Label.label(text="Similarity")
         rowCleanup1.prop(
             bpy.context.scene.SrcEngCollProperties, "Similar_Factor")
-        rowCleanup1.prop(
-            bpy.context.scene.SrcEngCollProperties, "Distance_Modifier")
         rowCleanup2.operator("object.src_eng_cleanup_merge_similars")
 
         rowCleanup3_Label.label(text="Thinness")
