@@ -11,7 +11,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (0, 7),
+    "version": (0, 8),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -30,8 +30,6 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         name="Similar Factor", subtype="FACTOR", description="Percentage of similarity between hulls that is required in order for them to be merged together. At the default setting, hulls must be 90 percent similar in order to be merged", min=.5, max=1.0, default=.9)
     Thin_Threshold: bpy.props.FloatProperty(
         name="Thin Threshold", subtype="FACTOR", description="The thinness threshold to use when removing thin hulls. If set to default, the operator will only remove faces with an area that is lower than 10 percent of the average area of all faces", min=0.0001, max=.5, default=.01)
-    Thin_Collapse: bpy.props.BoolProperty(
-        name="Collapse", description="If enabled, thin faces will not be deleted, but instead will be collapsed in-place, preventing holes in geometry", default=True)
     QC_Folder: bpy.props.StringProperty(
         name="QC Folder", subtype="DIR_PATH", description="Full path of the folder in which to save the generated QCs", default="//export//phys//", maxlen=1024)
     QC_Src_Models_Dir: bpy.props.StringProperty(
@@ -605,8 +603,8 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
             bm_processed = bmesh.new()
 
             bm.from_mesh(me)
-            bm.verts.ensure_lookup_table()
             bm.verts.index_update()
+            bm.verts.ensure_lookup_table()
 
             hulls = [hull for hull in bmesh_get_hulls(
                 bm, verts=bm.verts)]
@@ -799,55 +797,119 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
         return {'FINISHED'}
 
-# Remove Thin faces operator
+# Remove Thin Hulls operator
 
 
-class Cleanup_RemoveThinFaces(bpy.types.Operator):
-    """Removes polygons that are smaller than the model's average face area, based on the Thin Threshold setting. If using this on a collision mesh, you should use Force Convex on it afterward"""
-    bl_idname = "object.src_eng_cleanup_remove_thin_faces"
-    bl_label = "Remove Thin Faces"
+class Cleanup_RemoveThinHulls(bpy.types.Operator):
+    """Removes hulls that are much smaller than the average hull volume, based on the Thin Threshold setting"""
+    bl_idname = "object.src_eng_cleanup_remove_thin_hulls"
+    bl_label = "Remove Thin Hulls"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
         if check_for_selected():
+            thin_threshold = bpy.context.scene.SrcEngCollProperties.Thin_Threshold
+
             obj = bpy.context.active_object
-            faces = obj.data.polygons
-            area_threshold = bpy.context.scene.SrcEngCollProperties.Thin_Threshold
-            collapse = bpy.context.scene.SrcEngCollProperties.Thin_Collapse
-            cumulative_area = 0
-
-            bpy.ops.object.mode_set(mode='OBJECT')
-
-            for f in faces:
-                cumulative_area += f.area
-
-            average_area = cumulative_area / len(faces)
-
-            thin_faces = {f.index for f in faces if f.area <
-                          (average_area * area_threshold)}
+            original_name = obj.name
+            total_hull_count = 0
 
             # Make sure no faces are selected
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.reveal()
+            bpy.ops.mesh.select_mode(type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.transform_apply(
+                location=False, rotation=True, scale=True)
+
+            # Select all hulls and separate them into separate objects
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.dissolve_limited(
+                angle_limit=0.0872665, delimit={'NORMAL'})
+            bpy.ops.mesh.quads_convert_to_tris(
+                quad_method='BEAUTY', ngon_method='BEAUTY')
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Begin Bmesh processing
+            me = obj.data
+            bm = bmesh.new()
+            bm_processed = bmesh.new()
+
+            bm.from_mesh(me)
+            hulls = [hull for hull in bmesh_get_hulls(
+                bm, verts=bm.verts)]
+            print(me.name, "Hulls to process:", len(hulls))
+
+            hulls_to_check = list()
+
+            # Create individual hull bmeshes
+            for hull in hulls:
+                bm_hull = bmesh.new()
+
+                # Add vertices to individual bmesh hull
+                for vert in hull:
+                    bmesh.ops.create_vert(bm_hull, co=vert.co)
+
+                # Generate convex hull
+                ch = bmesh.ops.convex_hull(
+                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                bmesh.ops.delete(
+                    bm_hull,
+                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                    context='VERTS')
+
+                # Add the processed hull to list for volume checking
+                hulls_to_check.append(bm_hull)
+
+            avg_volume = sum([bm_hull.calc_volume(signed=False)
+                             for bm_hull in hulls_to_check]) / len(hulls_to_check)
+
+            # Check volume if below threshold
+            for bm_hull in hulls_to_check:
+                vol = bm_hull.calc_volume(signed=False)
+                if vol > (thin_threshold * avg_volume):
+                    bmesh_join(bm_processed, bm_hull)
+                    total_hull_count += 1
+                bm_hull.clear()
+                bm_hull.free()
+
+            bm_processed.to_mesh(me)
+            me.update()
+            bm.clear()
+            bm.free()
+            bm_processed.clear()
+            bm_processed.free()
+
+            # End Bmesh processing
+
+            # Rejoin and clean up
+            bpy.context.active_object.name = original_name
+            bpy.ops.object.transform_apply(
+                location=False, rotation=True, scale=True)
+            bpy.ops.object.shade_smooth()
+
+            # Remove non-manifolds
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.select_mode(
                 use_extend=False, use_expand=False, type='VERT')
             bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='FACE')
+            bpy.ops.mesh.select_non_manifold()
+            bpy.ops.mesh.select_linked(delimit=set())
+            bpy.ops.mesh.delete(type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.mode_set(mode='OBJECT')
-
-            for i in thin_faces:
-                faces[i].select = True
-
-            bpy.ops.object.mode_set(mode='EDIT')
-
-            if collapse:
-                bpy.ops.mesh.edge_collapse()
-                bpy.ops.mesh.select_mode(
-                    use_extend=False, use_expand=False, type='VERT')
-            else:
-                bpy.ops.mesh.delete(type='FACE')
-
-            bpy.ops.object.mode_set(mode='OBJECT')
+            amount_removed = len(hulls_to_check) - total_hull_count
+            display_msg_box(
+                "Removed " + str(amount_removed) + " hull(s)", "Info", "INFO")
+            print(
+                "Removed " + str(amount_removed) + " hull(s)")
 
         return {'FINISHED'}
 
@@ -1278,6 +1340,40 @@ class UpdateVMF(bpy.types.Operator):
 
         return {'FINISHED'}
 
+
+# Cleanup Collections operator
+
+class CleanupCollection(bpy.types.Operator):
+    """Cleans up the Collision Models collection, if it exists, by removing any empty subcollections"""
+    bl_idname = "object.src_eng_cleanup_collection"
+    bl_label = "Cleanup Collection"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+
+        if "Collision Models" in bpy.data.collections.keys():
+
+            removed_count = 0
+
+            children = [
+                c.name for c in bpy.data.collections["Collision Models"].children_recursive]
+
+            for c in children:
+                if len(bpy.data.collections[c].objects) == 0:
+                    removed_count += 1
+                    bpy.data.collections.remove(bpy.data.collections[c])
+
+            display_msg_box("Removed  " + str(removed_count) +
+                            " collection(s)", "Info", "INFO")
+            print("Removed  " + str(removed_count) +
+                  " collection(s)")
+        else:
+            display_msg_box(
+                "There is no 'Collision Models' collection to clean up", "Info", "INFO")
+
+        return {'FINISHED'}
+
+
 # End classes
 
 
@@ -1286,10 +1382,11 @@ ops = (
     SplitUpSrcCollision,
     GenerateSourceQC,
     Cleanup_MergeAdjacentSimilars,
-    Cleanup_RemoveThinFaces,
+    Cleanup_RemoveThinHulls,
     Cleanup_ForceConvex,
     Cleanup_RemoveInsideHulls,
     RecommendedCollSettings,
+    CleanupCollection,
     UpdateVMF
 )
 
@@ -1352,6 +1449,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup5_Label = boxCleanup.row()
         rowCleanup5 = boxCleanup.row()
         rowCleanup6 = boxCleanup.row()
+        rowCleanup7 = boxCleanup.row()
         boxCleanup.separator()
 
         rowCleanup1_Label.label(text="Similarity")
@@ -1362,12 +1460,11 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup3_Label.label(text="Thinness")
         rowCleanup3.prop(
             bpy.context.scene.SrcEngCollProperties, "Thin_Threshold")
-        rowCleanup3.prop(
-            bpy.context.scene.SrcEngCollProperties, "Thin_Collapse")
-        rowCleanup4.operator("object.src_eng_cleanup_remove_thin_faces")
+        rowCleanup4.operator("object.src_eng_cleanup_remove_thin_hulls")
         rowCleanup5_Label.label(text="Other")
         rowCleanup5.operator("object.src_eng_cleanup_force_convex")
         rowCleanup6.operator("object.src_eng_cleanup_remove_inside")
+        rowCleanup7.operator("object.src_eng_cleanup_collection")
 
         # Compile / QC UI
         boxQC = row6.box()
@@ -1402,9 +1499,10 @@ classes = (
     SplitUpSrcCollision,
     GenerateSourceQC,
     Cleanup_MergeAdjacentSimilars,
-    Cleanup_RemoveThinFaces,
+    Cleanup_RemoveThinHulls,
     Cleanup_ForceConvex,
     Cleanup_RemoveInsideHulls,
+    CleanupCollection,
     RecommendedCollSettings,
     UpdateVMF
 )
