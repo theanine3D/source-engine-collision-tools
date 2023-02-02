@@ -390,7 +390,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             bm.from_mesh(me)
             hulls = [hull for hull in bmesh_get_hulls(
                 bm, verts=bm.verts)]
-            print(me.name, "Hulls to process:", len(hulls))
+            print("Hulls to process:", len(hulls))
 
             # Create individual hull bmeshes
             for hull in hulls:
@@ -608,7 +608,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
             hulls = [hull for hull in bmesh_get_hulls(
                 bm, verts=bm.verts)]
-            print(me.name, "Hulls to process:", len(hulls))
+            print("Hulls to process:", len(hulls))
             hull_bm_list = list()
 
             i = 0
@@ -842,7 +842,7 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
             bm.from_mesh(me)
             hulls = [hull for hull in bmesh_get_hulls(
                 bm, verts=bm.verts)]
-            print(me.name, "Hulls to process:", len(hulls))
+            print("Hulls to process:", len(hulls))
 
             hulls_to_check = list()
 
@@ -957,7 +957,7 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             bm.from_mesh(me)
             hulls = [hull for hull in bmesh_get_hulls(
                 bm, verts=bm.verts)]
-            print(me.name, "Hulls to process:", len(hulls))
+            print("Hulls to process:", len(hulls))
 
             # Create individual hull bmeshes
             for hull in hulls:
