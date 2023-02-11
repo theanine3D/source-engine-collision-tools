@@ -35,3 +35,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 ![merge-similars](https://user-images.githubusercontent.com/88953117/213289714-d13d5bb8-ef37-439e-8eac-1370b4716bab.gif)
 ### Remove Thin Hulls
 ![remove-thin-hulls](https://user-images.githubusercontent.com/88953117/216437113-22036e00-dcbe-4e74-a6c9-388fb96ac173.gif)
+### Video
+Click the image below to watch a breakdown video of all the features in the addon.
+
+[![YouTube Video](https://i.ytimg.com/an_webp/ASLw-FMQUXM/mqdefault_6s.webp?du=3000&sqp=COPqnp8G&rs=AOn4CLDjeJm8SgXZQLi312XifnR8coUL3w)](https://www.youtube.com/watch?v=ASLw-FMQUXM)
