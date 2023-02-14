@@ -38,4 +38,4 @@ Some features are customizeable and can be tweaked via optional settings. There 
 ### Video
 Click the image below to watch a breakdown video of all the features in the addon.
 
-[![YouTube Video](https://i.ytimg.com/an_webp/ASLw-FMQUXM/mqdefault_6s.webp?du=3000&sqp=COPqnp8G&rs=AOn4CLDjeJm8SgXZQLi312XifnR8coUL3w)](https://www.youtube.com/watch?v=ASLw-FMQUXM)
+[![YouTube Video](https://i9.ytimg.com/vi/ASLw-FMQUXM/mqdefault.jpg?sqp=CIyLsJ8G-oaymwEmCMACELQB8quKqQMa8AEB-AH-CYAC0AWKAgwIABABGH8gFCh0MA8=&rs=AOn4CLC3wYz58u5FQpi5Uk8HwFpFSSPYWg)](https://www.youtube.com/watch?v=ASLw-FMQUXM)
