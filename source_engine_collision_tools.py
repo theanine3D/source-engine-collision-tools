@@ -209,18 +209,6 @@ def generate_QC_lines(obj, models_dir, mats_dir):
     QC_template.append('}\n')
     return QC_template
 
-# def separate_loose_bmesh(obj, keep_separate=False,):
-#     me = obj.data
-#     bm = bmesh.new()
-#     bm.from_mesh(me)
-
-#     faces = obj.data.polygons
-#     verts = obj.data.vertices
-#     edges = obj.data.edges
-#     meshes = list()
-#     return meshes
-
-
 def bmesh_walk_hull(vert):
     ''' Walk all un-tagged linked verts '''
     vert.tag = True
