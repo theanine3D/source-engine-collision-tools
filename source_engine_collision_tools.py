@@ -209,6 +209,18 @@ def generate_QC_lines(obj, models_dir, mats_dir):
     QC_template.append('}\n')
     return QC_template
 
+# def separate_loose_bmesh(obj, keep_separate=False,):
+#     me = obj.data
+#     bm = bmesh.new()
+#     bm.from_mesh(me)
+
+#     faces = obj.data.polygons
+#     verts = obj.data.vertices
+#     edges = obj.data.edges
+#     meshes = list()
+#     return meshes
+
+
 def bmesh_walk_hull(vert):
     ''' Walk all un-tagged linked verts '''
     vert.tag = True
@@ -310,6 +322,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             obj_phys = bpy.context.active_object
             obj_phys.name = obj.name + "_phys"
 
+            bpy.ops.object.make_single_user(object=True, obdata=True)
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
             bpy.ops.object.shade_smooth()
