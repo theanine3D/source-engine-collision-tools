@@ -5,6 +5,9 @@ Blender (3.0+) addon for generating and optimizing collision models for use in S
 Some features are customizeable and can be tweaked via optional settings. There is also a "Recommended Settings" button that will automatically guess the best settings for you based on the currently selected, active object.
 - **Generate Collision Mesh** - Generate a Source Engine-compliant collision model based on the current active object.
   - Supports (optional) decimation, to automatically reduce the complexity of the resulting collision model
+- **Generate Fractured Collision** - Unlike the previous operator, this operator uses the Cell Fracture addon built into Blender to generate more accurate and performant collision meshes.
+  - Automatically creates a gap between collision hulls to prevent overlapping. The size of the gap is determined by the "Gap Width" setting
+  - Attempts to generate only the amount of hulls specified by the "Fracture Target" setting. ie. A "Fracture Target" of 4 will try to split up the model into only 4 parts.
 - **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model. Similarity is based on the face count and volume of the hulls.
 - **Remove Thin Hulls** - Removes any convex hulls that are significantly smaller than all other hulls.
