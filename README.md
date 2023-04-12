@@ -8,6 +8,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 - **Generate Fractured Collision** - Unlike the previous operator, this operator uses the Cell Fracture addon built into Blender to generate more accurate and performant collision meshes.
   - Automatically creates a gap between collision hulls to prevent overlapping. The size of the gap is determined by the "Gap Width" setting
   - Attempts to generate only the amount of hulls specified by the "Fracture Target" setting. ie. A "Fracture Target" of 4 will try to split up the model into only 4 parts.
+  - Note that the Cell Fracture addon might need to be manually enabled in your Blender preferences first!
 - **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model. Similarity is based on the face count and volume of the hulls.
 - **Remove Thin Hulls** - Removes any convex hulls that are significantly smaller than all other hulls.
