@@ -32,7 +32,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 
 ## Previews ##
 ### Interface ###
-![image](https://user-images.githubusercontent.com/88953117/216434606-367d0337-cbe9-4691-bc78-509acd481bf3.png)
+![image](https://user-images.githubusercontent.com/88953117/231596792-510833ce-45c6-4a75-a827-07b92649b6db.png)
 ### Generate Fractured Collision ###
 ![Untitled](https://user-images.githubusercontent.com/88953117/231557347-ce472d26-0634-4db9-a18f-0d1e7891a019.gif)
 ### Automatic Collision Generation
