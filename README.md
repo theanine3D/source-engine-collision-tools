@@ -1,6 +1,8 @@
 # Source Engine Collision Tools
 Blender (3.0+) addon for generating and optimizing collision models for use in Source Engine games (ie. TF2, GMod, L4D2). Works best when combined with the [Blender Source Tools](http://steamreview.org/BlenderSourceTools/).
 
+Finding this addon useful? Consider a [donation](https://www.paypal.com/donate/?hosted_button_id=K63REE7KJ3WUY).
+
 ## Features
 Some features are customizeable and can be tweaked via optional settings. There is also a "Recommended Settings" button that will automatically guess the best settings for you based on the currently selected, active object.
 - **Generate Collision Mesh** - Generate a Source Engine-compliant collision model based on the current active object.
