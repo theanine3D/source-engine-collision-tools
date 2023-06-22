@@ -11,7 +11,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 0),
+    "version": (1, 0, 1),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -848,9 +848,6 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                         continue
                     if index2 == None or index1 == None:
                         continue
-
-                    print("Comparing hull " + str(index1) +
-                          " with hull " + str(index2))
 
                     # Compare volumes
                     if vol2 >= (vol1 * similarity_threshold) and vol2 <= (vol1 * (1+(1-similarity_threshold))):
