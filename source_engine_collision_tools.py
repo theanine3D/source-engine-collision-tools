@@ -11,7 +11,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -351,7 +351,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             bpy.ops.mesh.select_all(action='SELECT')
 
             # Extrude faces
-            bpy.ops.mesh.extrude_region_move(MESH_OT_extrude_region={"use_normal_flip": False, "use_dissolve_ortho_edges": False, "mirror": False}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_axis_ortho": 'X', "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
+            bpy.ops.mesh.extrude_region_move(MESH_OT_extrude_region={"use_normal_flip": False, "use_dissolve_ortho_edges": False, "mirror": False}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
                 False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
 
             # Move the extruded faces inward
@@ -707,7 +707,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
                     h.select_set(True)
 
                 bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
-                bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_axis_ortho": 'X', "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
+                bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
                     False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
                 total_part_count += 1
                 bpy.ops.object.join()
