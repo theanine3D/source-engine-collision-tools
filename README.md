@@ -38,7 +38,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 ![image](https://user-images.githubusercontent.com/88953117/231596792-510833ce-45c6-4a75-a827-07b92649b6db.png)
 ### Generate Fractured Collision ###
 ![Untitled](https://user-images.githubusercontent.com/88953117/231557347-ce472d26-0634-4db9-a18f-0d1e7891a019.gif)
-### Automatic Collision Generation
+### Generate Collision Mesh
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
 ### Merge Adjacent Similars ###
 ![merge-similars](https://user-images.githubusercontent.com/88953117/213289714-d13d5bb8-ef37-439e-8eac-1370b4716bab.gif)
