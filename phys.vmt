@@ -1,0 +1,5 @@
+"UnlitGeneric"
+{
+	"$basetexture" "models/phys"
+	"$alphatest" 1
+}
