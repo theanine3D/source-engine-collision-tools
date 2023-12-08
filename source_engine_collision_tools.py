@@ -11,7 +11,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 0, 2),
+    "version": (1, 0, 4),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -322,8 +322,6 @@ class GenerateSrcCollision(bpy.types.Operator):
             obj_phys.name = obj.name + "_phys"
 
             bpy.ops.object.make_single_user(object=True, obdata=True)
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
             bpy.ops.object.shade_smooth()
             bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.reveal()
