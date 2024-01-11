@@ -14,7 +14,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
   - Note that the Cell Fracture addon needs to be enabled in your Blender preferences first!
   - _**NOTE**: This specific feature is currently broken in Blender 4.x due to a [bug](https://projects.blender.org/blender/blender-addons/issues/105012#issuecomment-1070774) in the Cell Fracture addon_
 
-_- **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
+- **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model. Similarity is based on the face count and volume of the hulls.
 - **Remove Thin Hulls** - Removes any convex hulls that are significantly smaller than all other hulls.
 - **Force Convex** - Forces all existing hulls in a collision model to be convex. Especially useful after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
