@@ -24,11 +24,10 @@ Some features are customizeable and can be tweaked via optional settings. There 
 - **Export Hulls to Hammer .VMF** - Converts hulls in the selected collision mesh into Source Engine brush solids and exports them as a .VMF file that can be opened in Hammer.
 
 ## Installation
-1. For the newest, bleeding edge version, download [source_engine_collision_tools.py](https://github.com/theanine3D/source-engine-collision-tools/raw/main/source_engine_collision_tools.py) (right click this link and Save As...) If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
-2. Go into Blender's addon preferences (File → Preferences → Addons)
-3. Click the "Install..." button and browse to source_engine_collision_tools.py, select it, and press "Install Add-on"
-
-(Note: The .PY file is installed directly, without a ZIP file)
+- For the newest, bleeding edge version, press the big green "Code" button above, and choose "Download ZIP"
+- If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
+- After downloading either of the above, go into Blender's addon preferences (File → Preferences → Addons)
+4. Click the "Install..." button and browse to the ZIP file you just downloaded, select it, and press "Install Add-on"
 
 ## Tips
 - Decimation (by the Generate Collision Mesh operator) generally makes the Merge Adjacent Similars operator less effective, but Decimation is much faster at reducing the final complexity of the collision mesh. However, Decimation will reduce the complexity uniformly across the entire model, whereas Merge Adjacent Similars tries to reduce complexity only where similar hulls are found.
