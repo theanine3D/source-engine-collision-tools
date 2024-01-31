@@ -104,7 +104,7 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         description="If enabled, partitioned (ie. _part_) collision models will be REMOVED from the VMF along with their corresponding entity (ie. prop_static). Can't be undone. Keep a backup VMF just in case",
         default=False)
     VMF_Export_Dir: bpy.props.StringProperty(
-        name="Export to:",
+        name="Export to",
         subtype='DIR_PATH',
         description="Folder where exported hulls will be saved as Hammer brush .VMF files",
         default=""
