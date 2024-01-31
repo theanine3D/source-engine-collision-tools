@@ -1,6 +1,6 @@
 import bpy
 import bmesh
-from mathutils import Vector
+import mathutils
 from bpy.utils import(register_class, unregister_class)
 from bpy.types import(Panel, PropertyGroup)
 from bpy.props import(StringProperty,
@@ -947,8 +947,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                                             for v in bm2.verts)) / 3
                             bm1_origin_z = (sum(v.co[0]
                                             for v in bm2.verts)) / 3
-                            bm1_origin = Vector((
-                                bm1_origin_x, bm1_origin_y, bm1_origin_z))
+                            bm1_origin = mathutils.Vector((bm1_origin_x, bm1_origin_y, bm1_origin_z))
 
                             bm2_origin_x = (
                                 sum(v.co[0] for v in bm2.verts)) / len(bm2.verts)
@@ -956,7 +955,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                                             for v in bm2.verts)) / 3
                             bm2_origin_z = (sum(v.co[0]
                                             for v in bm2.verts)) / 3
-                            bm2_origin = Vector((
+                            bm2_origin = mathutils.Vector((
                                 bm2_origin_x, bm2_origin_y, bm2_origin_z))
 
                             # # Get distance between the two center coordinates
@@ -1315,9 +1314,9 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
             for outer_hull in hulls:
 
                 # Get bounding box lowest and highest vertices - to check if inner hull is inside it later
-                hull_bbox_min = outer_hull.matrix_world @ Vector(
+                hull_bbox_min = outer_hull.matrix_world @ mathutils.Vector(
                     outer_hull.bound_box[0])
-                hull_bbox_max = outer_hull.matrix_world @ Vector(
+                hull_bbox_max = outer_hull.matrix_world @ mathutils.Vector(
                     outer_hull.bound_box[6])
 
                 def check_inside_bbox(h):
