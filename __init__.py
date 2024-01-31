@@ -571,11 +571,6 @@ class FractGenSrcCollision(bpy.types.Operator):
             obj_collections = [
                 c for c in bpy.data.collections if obj.name in c.objects.keys()]
 
-            if "_phys" in bpy.context.active_object.name:
-                display_msg_box(
-                    "You have an existing collision model selected. Select a different model and try again.", "Error", "ERROR")
-                return {'FINISHED'}
-
             fracture_target = bpy.context.scene.SrcEngCollProperties.Fracture_Target
             voxel_res = bpy.context.scene.SrcEngCollProperties.Voxel_Resolution
             gap_width = bpy.context.scene.SrcEngCollProperties.Gap_Width
@@ -686,7 +681,8 @@ class FractGenSrcCollision(bpy.types.Operator):
                 collection_phys = bpy.data.collections.new(obj_phys.name)
                 root_collection.children.link(collection_phys)
 
-            collection_phys.objects.link(obj_phys)
+            if obj_phys.name not in collection_phys.objects.keys():
+                collection_phys.objects.link(obj_phys)
 
             # Unlink the new collision model from other collections
             for c in obj_collections:
