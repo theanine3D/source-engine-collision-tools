@@ -30,6 +30,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 4. Click the "Install..." button and browse to the ZIP file you just downloaded, select it, and press "Install Add-on"
 
 ## Tips
+- The UI for the addon is found in the "Object Properties" tab on the right-hand side of the Blender window. The UI's features are greyed out if you have no object selected, so select an object first in the 3D VIewport.
 - Decimation (by the Generate Collision Mesh operator) generally makes the Merge Adjacent Similars operator less effective, but Decimation is much faster at reducing the final complexity of the collision mesh. However, Decimation will reduce the complexity uniformly across the entire model, whereas Merge Adjacent Similars tries to reduce complexity only where similar hulls are found.
 - Merge Adjacent Similars is less effective on overly large, complex models. For best results, split up a large complex model into several (3-5) separate pieces first, and then use Merge Adjacent Similars on each individual piece.
 - For the "Update VMF" feature, the very first part of your split-up collision mesh, ending in 'part_000.mdl', must already be in the VMF somewhere (such as in a prop_static). The operator scans the VMF for any part_000, and any that are found are used as a template for all the other parts. So you'll need to add that first part manually in Hammer first.
