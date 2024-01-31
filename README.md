@@ -20,7 +20,8 @@ Some features are customizeable and can be tweaked via optional settings. There 
 - **Force Convex** - Forces all existing hulls in a collision model to be convex. Especially useful after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
 - **Remove Inside Hulls** - Removes any hulls that are completely or almost completely buried inside other hulls.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
-- **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map. 
+- **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map.
+- **Export Hulls to Hammer .VMF** - Converts hulls in the selected collision mesh into Source Engine brush solids and exports them as a .VMF file that can be opened in Hammer.
 
 ## Installation
 1. For the newest, bleeding edge version, download [source_engine_collision_tools.py](https://github.com/theanine3D/source-engine-collision-tools/raw/main/source_engine_collision_tools.py) (right click this link and Save As...) If you want a more stable release, check the [Releases](https://github.com/theanine3D/source-engine-collision-tools/releases).
