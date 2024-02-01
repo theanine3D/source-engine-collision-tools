@@ -1741,7 +1741,7 @@ class ExportVMF(bpy.types.Operator):
             print(f"[VMF Export] Added {len(solids_to_add)} solids to VMF")
 
             import time
-            export_path = os.path.join(vmf_export_dir, time.strftime("%Y%m%d-%H%M%S")) + "" + ".vmf"
+            export_path = os.path.join(bpy.path.abspath(vmf_export_dir), time.strftime("%Y%m%d-%H%M%S")) + "" + ".vmf"
             print("Export path: " + export_path)
             
             try:
