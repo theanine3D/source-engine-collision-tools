@@ -12,7 +12,6 @@ Some features are customizeable and can be tweaked via optional settings. There 
   - Automatically creates a gap between collision hulls to prevent overlapping. The size of the gap is determined by the "Gap Width" setting
   - Attempts to generate only the amount of hulls specified by the "Fracture Target" setting. ie. A "Fracture Target" of 4 will try to split up the model into only 4 parts.
   - Note that the Cell Fracture addon needs to be enabled in your Blender preferences first!
-  - _**NOTE**: This specific feature is currently broken in Blender 4.x due to a [bug](https://projects.blender.org/blender/blender-addons/issues/105012#issuecomment-1070774) in the Cell Fracture addon_
 
 - **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model. Similarity is based on the face count and volume of the hulls.
