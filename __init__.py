@@ -16,7 +16,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -61,6 +61,12 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         min=0.001,
         soft_max=200.0,
         default=40.0)
+    Merge_Distance: bpy.props.FloatProperty(
+        name="Merge Distance",
+        description="A value higher than zero will cause close-together vertices to merge, resulting in a more performant (but potentially less accurate) collision mesh",
+        min=0.0001,
+        soft_max=1,
+        default=0.0001)
     Similar_Factor: bpy.props.FloatProperty(
         name="Similar Factor",
         subtype="FACTOR",
@@ -385,6 +391,7 @@ class GenerateSrcCollision(bpy.types.Operator):
                 c for c in bpy.data.collections if obj.name in c.objects.keys()]
             extrude_modifier = (-1) * \
                 bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier
+            merge_distance = bpy.context.scene.SrcEngCollProperties.Merge_Distance
 
             if "_phys" in bpy.context.active_object.name:
                 display_msg_box(
@@ -417,7 +424,7 @@ class GenerateSrcCollision(bpy.types.Operator):
                 use_extend=False, use_expand=False, type='VERT')
             bpy.ops.mesh.select_all(action='SELECT')
             bpy.ops.mesh.mark_sharp(clear=True)
-            bpy.ops.mesh.remove_doubles()
+            bpy.ops.mesh.remove_doubles(threshold=merge_distance)
             bpy.ops.mesh.tris_convert_to_quads(
                 seam=True, sharp=True, materials=True)
 
@@ -1856,8 +1863,9 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowGen.operator("object.src_eng_recc_settings")       
         row1.prop(bpy.context.scene.SrcEngCollProperties, "Decimate_Ratio")
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Extrusion_Modifier")
-        row3.operator("object.src_eng_collision")
-        row4.operator("object.src_eng_split")
+        row3.prop(bpy.context.scene.SrcEngCollProperties, "Merge_Distance")
+        row4.operator("object.src_eng_collision")
+        row5.operator("object.src_eng_split")
 
         # Fracture Generator UI
         boxFractGen = rowFractGen.box()
