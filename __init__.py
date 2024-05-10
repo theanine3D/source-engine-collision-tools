@@ -393,13 +393,6 @@ class GenerateSrcCollision(bpy.types.Operator):
                 bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier
             merge_distance = bpy.context.scene.SrcEngCollProperties.Merge_Distance
 
-            if "_phys" in bpy.context.active_object.name:
-                display_msg_box(
-                    "You have an existing collision model selected. Select a different model and try again.", "Error", "ERROR")
-                return {'FINISHED'}
-
-            original_dimensions = obj.dimensions
-
             obj_phys = None
             collection_phys = None
 
@@ -566,12 +559,14 @@ class FractGenSrcCollision(bpy.types.Operator):
             return {'FINISHED'}
         
         if check_for_selected():
+           
             root_collection = None
             if 'Collision Models' in bpy.data.collections.keys():
                 root_collection = bpy.data.collections['Collision Models']
             else:
                 root_collection = bpy.data.collections.new("Collision Models")
                 bpy.context.scene.collection.children.link(root_collection)
+            original_collection = bpy.context.collection
 
             obj = bpy.context.active_object
             obj_collections = [
@@ -691,12 +686,13 @@ class FractGenSrcCollision(bpy.types.Operator):
                 collection_phys.objects.link(obj_phys)
 
             # Unlink the new collision model from other collections
+            original_collection.objects.unlink(obj_phys)
             for c in obj_collections:
                 if obj_phys.name in c.objects.keys():
                     c.objects.unlink(obj_phys)
             if obj_phys.name in bpy.context.scene.collection.objects.keys():
                 bpy.context.scene.collection.objects.unlink(obj_phys)
-
+            
             # Restore original origin point
             new_origin = tuple(obj.location)
             bpy.context.scene.cursor.location = new_origin
