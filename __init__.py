@@ -16,7 +16,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 1, 1),
+    "version": (1, 1, 2),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -415,7 +415,7 @@ class GenerateSrcCollision(bpy.types.Operator):
 
             bpy.ops.object.make_single_user(object=True, obdata=True)
             bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
+                location=True, rotation=True, scale=True)
             bpy.ops.object.shade_smooth()
             bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.reveal()
@@ -539,8 +539,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             bpy.context.active_object.data.materials[0].diffuse_color = (
                 1, 0, 0.78315, 1)
 
-            # Reset size back to normal
-            obj_phys.dimensions = original_dimensions
+            # Finalize transforms
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
             display_msg_box(
