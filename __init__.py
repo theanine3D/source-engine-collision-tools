@@ -16,7 +16,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 2, 0),
+    "version": (1, 1, 2),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -29,7 +29,7 @@ bl_info = {
 class SrcEngCollProperties(bpy.types.PropertyGroup):
     Detriangulate: bpy.props.BoolProperty(
         name="Detriangulate",
-        description="If enabled, the resulting collision mesh is much more optimized, with roughly 50%% less hulls, but it is also potentially less accurate. If you prioritize accuracy over optimization, disable this",
+        description="If enabled, the resulting collision mesh is much more optimized, but also potentially less accurate. If you prefer or need extreme accuracy over optimization, disable this",
         default=True)
     Post_Merge: bpy.props.BoolProperty(
         name="Post-Merge",
