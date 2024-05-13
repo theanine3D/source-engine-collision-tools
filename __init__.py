@@ -1582,10 +1582,8 @@ class UpdateVMF(bpy.types.Operator):
                     print(f"Root: {root}")
                     entity_index = part[0]
 
-                    # CODE BEGINS TO FAIL SOMEWHERE BETWEEN HERE
                     matching_objs = set([o for o in objs if root in o])
                     print(f"Length of matching_objs: {len(matching_objs)}")
-                    # AND HERE
 
                     # For every matched Blender object
                     for matched in matching_objs:
