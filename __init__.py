@@ -27,7 +27,7 @@ bl_info = {
 
 
 class SrcEngCollProperties(bpy.types.PropertyGroup):
-    Detriangulate: bpy.props.BoolProperty(
+    Dissolve: bpy.props.BoolProperty(
         name="Detriangulate",
         description="If enabled, the resulting collision mesh is much more optimized, but also potentially less accurate. If you prefer accuracy over optimization, disable this",
         default=True)
@@ -424,13 +424,13 @@ class GenerateSrcCollision(bpy.types.Operator):
             bpy.ops.mesh.select_all(action='SELECT')
             bpy.ops.mesh.mark_sharp(clear=True)
             bpy.ops.mesh.remove_doubles(threshold=merge_distance)
-            if bpy.context.scene.SrcEngCollProperties.Detriangulate:
+            if bpy.context.scene.SrcEngCollProperties.Dissolve:
                 bpy.ops.mesh.tris_convert_to_quads(
                     seam=True, sharp=True, materials=True)
+                bpy.ops.mesh.dissolve_limited(
+                    angle_limit=0.0872665, delimit={'NORMAL'})
 
             # Decimate and clean up mesh to minimize unnecessary hulls being generated later
-            bpy.ops.mesh.dissolve_limited(
-                angle_limit=0.0872665, delimit={'NORMAL'})
             bpy.ops.mesh.vert_connect_concave()
             bpy.ops.mesh.face_make_planar(repeat=20)
             bpy.ops.mesh.vert_connect_nonplanar()
@@ -1899,7 +1899,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row1.prop(bpy.context.scene.SrcEngCollProperties, "Decimate_Ratio")
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Extrusion_Modifier")
         row3.prop(bpy.context.scene.SrcEngCollProperties, "Merge_Distance")
-        row4.prop(bpy.context.scene.SrcEngCollProperties, "Detriangulate")
+        row4.prop(bpy.context.scene.SrcEngCollProperties, "Dissolve")
         row4.prop(bpy.context.scene.SrcEngCollProperties, "Post_Merge")
         row5.operator("object.src_eng_collision")
         row6.operator("object.src_eng_split")
