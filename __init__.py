@@ -16,7 +16,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 1, 2),
+    "version": (1, 2, 0),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -27,6 +27,14 @@ bl_info = {
 
 
 class SrcEngCollProperties(bpy.types.PropertyGroup):
+    Detriangulate: bpy.props.BoolProperty(
+        name="Detriangulate",
+        description="If enabled, the resulting collision mesh is much more optimized, with roughly 50%% less hulls, but it is also potentially less accurate. If you prioritize accuracy over optimization, disable this",
+        default=True)
+    Post_Merge: bpy.props.BoolProperty(
+        name="Post-Merge",
+        description="Can dramatically reduce the hull count for smaller or individual props. Leave this disabled if you're generating collision for entire rooms, levels, or any objects with interior cavities",
+        default=False)
     Decimate_Ratio: bpy.props.FloatProperty(
         name="Decimate Ratio",
         subtype="FACTOR",
@@ -416,8 +424,9 @@ class GenerateSrcCollision(bpy.types.Operator):
             bpy.ops.mesh.select_all(action='SELECT')
             bpy.ops.mesh.mark_sharp(clear=True)
             bpy.ops.mesh.remove_doubles(threshold=merge_distance)
-            bpy.ops.mesh.tris_convert_to_quads(
-                seam=True, sharp=True, materials=True)
+            if bpy.context.scene.SrcEngCollProperties.Detriangulate:
+                bpy.ops.mesh.tris_convert_to_quads(
+                    seam=True, sharp=True, materials=True)
 
             # Decimate and clean up mesh to minimize unnecessary hulls being generated later
             bpy.ops.mesh.dissolve_limited(
@@ -533,6 +542,22 @@ class GenerateSrcCollision(bpy.types.Operator):
             # Finalize transforms
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
+            
+            # Optional post-merge
+            if bpy.context.scene.SrcEngCollProperties.Post_Merge:
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.remove_doubles(threshold=merge_distance)
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.src_eng_cleanup_force_convex()
+                bm = bmesh.new()
+
+                bm.from_mesh(me)
+                hulls = [hull for hull in bmesh_get_hulls(
+                    bm, verts=bm.verts)]
+                total_hull_count = len(hulls)
+            
             display_msg_box(
                 "Generated collision mesh with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
             print("Generated collision mesh with total hull count of " +
@@ -1859,6 +1884,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row3 = layout.row()
         row4 = layout.row()
         row5 = layout.row()
+        row6 = layout.row()
         layout.separator()
 
         rowFractGen = layout.row()
@@ -1873,8 +1899,10 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row1.prop(bpy.context.scene.SrcEngCollProperties, "Decimate_Ratio")
         row2.prop(bpy.context.scene.SrcEngCollProperties, "Extrusion_Modifier")
         row3.prop(bpy.context.scene.SrcEngCollProperties, "Merge_Distance")
-        row4.operator("object.src_eng_collision")
-        row5.operator("object.src_eng_split")
+        row4.prop(bpy.context.scene.SrcEngCollProperties, "Detriangulate")
+        row4.prop(bpy.context.scene.SrcEngCollProperties, "Post_Merge")
+        row5.operator("object.src_eng_collision")
+        row6.operator("object.src_eng_split")
 
         # Fracture Generator UI
         boxFractGen = rowFractGen.box()
