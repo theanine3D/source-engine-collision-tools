@@ -448,10 +448,10 @@ class GenerateSrcCollision(bpy.types.Operator):
             bpy.ops.object.shade_smooth()
 
             # Setup collection
-            if (obj_phys.name) in bpy.data.collections.keys():
-                collection_phys = bpy.data.collections[obj_phys.name]
+            if (obj_phys.name.lower()) in bpy.data.collections.keys():
+                collection_phys = bpy.data.collections[obj_phys.name.lower()]
             else:
-                collection_phys = bpy.data.collections.new(obj_phys.name)
+                collection_phys = bpy.data.collections.new(obj_phys.name.lower())
                 root_collection.children.link(collection_phys)
 
             collection_phys.objects.link(obj_phys)
@@ -508,7 +508,7 @@ class GenerateSrcCollision(bpy.types.Operator):
 
             # Recombine into one object
             bpy.ops.object.mode_set(mode='OBJECT')
-            obj_phys.name = obj.name + "_phys"
+            obj_phys.name = obj.name.lower() + "_phys"
             bpy.ops.object.shade_smooth()
 
             # Remove non-manifold and degenerates
@@ -583,7 +583,7 @@ class FractGenSrcCollision(bpy.types.Operator):
                 bpy.data.objects.remove(bpy.data.objects[obj.name + "_phys"])
 
             obj_phys = obj.copy()
-            obj_phys.name = obj.name + "_phys"
+            obj_phys.name = obj.name.lower() + "_phys"
             bpy.context.collection.objects.link(obj_phys)
             obj.select_set(False)
             obj.hide_set(True)
@@ -667,15 +667,15 @@ class FractGenSrcCollision(bpy.types.Operator):
 
             # Begin finalizing
             bpy.ops.object.mode_set(mode='OBJECT')
-            obj_phys.name = obj.name + "_phys"
+            obj_phys.name = obj.name.lower() + "_phys"
             bpy.ops.object.shade_smooth()
             obj.hide_set(True)
             bpy.ops.object.transform_apply(
                 location=False, rotation=True, scale=True)
             
             # Setup collection
-            if (obj_phys.name) in bpy.data.collections.keys():
-                collection_phys = bpy.data.collections[obj_phys.name]
+            if (obj_phys.name.lower()) in bpy.data.collections.keys():
+                collection_phys = bpy.data.collections[obj_phys.name.lower()]
             else:
                 collection_phys = bpy.data.collections.new(obj_phys.name)
                 root_collection.children.link(collection_phys)
@@ -1492,6 +1492,13 @@ class UpdateVMF(bpy.types.Operator):
             # Get list of all objects in the Collision Models collection
             objs = [
                 obj.name for obj in root_collection.all_objects if "_part_" in obj.name]
+            
+            # Rename all collision pieces to lowercase to match Hammer's forced lower-casing
+            for o in objs:
+                bpy.data.objects[o].name = o.lower()
+                o = o.lower()
+
+            print(f"List of collision objs: {objs}")
             objs.sort()
 
             print("Opening VMF file at: " + VMF_path)
@@ -1558,16 +1565,27 @@ class UpdateVMF(bpy.types.Operator):
                     if part_zero_found:
                         parts_zero_found.append(
                             (i, part_zero_found.group()))
+                        print("Found part zero")
 
                     i += 1
+
+
+                print(f"{len(parts_zero_found)} parts zero found")
 
                 new_entities_to_add = set()
 
                 # For every _part_000 that was found...
                 for part in parts_zero_found:
+                    
+                    print(f"Processing part: {part}")
                     root = part[1][0:-3]
+                    print(f"Root: {root}")
                     entity_index = part[0]
+
+                    # CODE BEGINS TO FAIL SOMEWHERE BETWEEN HERE
                     matching_objs = set([o for o in objs if root in o])
+                    print(f"Length of matching_objs: {len(matching_objs)}")
+                    # AND HERE
 
                     # For every matched Blender object
                     for matched in matching_objs:
