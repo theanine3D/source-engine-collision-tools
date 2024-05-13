@@ -1823,7 +1823,7 @@ class CleanupCollection(bpy.types.Operator):
                     removed_count += 1
                     bpy.data.collections.remove(bpy.data.collections[c])
 
-            display_msg_box("Removed  " + str(removed_count) +
+            display_msg_box("Removed " + str(removed_count) +
                             " collection(s)", "Info", "INFO")
             print("Removed  " + str(removed_count) +
                   " collection(s)")
