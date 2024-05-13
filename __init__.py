@@ -89,13 +89,11 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         maxlen=1024)
     QC_Src_Models_Dir: bpy.props.StringProperty(
         name="Models Path",
-        subtype="DIR_PATH",
         description="Path of the folder where your compiled models are stored in the Source Engine game directory (ie. the path in $modelname, but without the model name)",
         default="mymodels\\",
         maxlen=1024)
     QC_Src_Mats_Dir: bpy.props.StringProperty(
         name="Materials Path",
-        subtype="DIR_PATH",
         description="Path of the folder where your VMT and VTF files are stored in the Source Engine game directory (ie. the $cdmaterials path)",
         default="models\mymodels\\",
         maxlen=1024)
