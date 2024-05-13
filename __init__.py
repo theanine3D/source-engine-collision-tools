@@ -29,7 +29,7 @@ bl_info = {
 class SrcEngCollProperties(bpy.types.PropertyGroup):
     Detriangulate: bpy.props.BoolProperty(
         name="Detriangulate",
-        description="If enabled, the resulting collision mesh is much more optimized, but also potentially less accurate. If you prefer or need extreme accuracy over optimization, disable this",
+        description="If enabled, the resulting collision mesh is much more optimized, but also potentially less accurate. If you prefer accuracy over optimization, disable this",
         default=True)
     Post_Merge: bpy.props.BoolProperty(
         name="Post-Merge",
