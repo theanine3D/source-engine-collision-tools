@@ -8,6 +8,7 @@ from bpy.props import(StringProperty,
 import re
 import os
 import sys
+import shutil
 addon_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(addon_path)
 from PyVMF.PyVMF import *
@@ -16,7 +17,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 2, 0),
+    "version": (1, 2, 1),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -97,13 +98,13 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         maxlen=1024)
     QC_Src_Models_Dir: bpy.props.StringProperty(
         name="Models Path",
-        description="Path of the folder where your compiled models are stored in the Source Engine game directory (ie. the path in $modelname, but without the model name)",
-        default="mymodels\\",
+        description="Path of the folder where your compiled models are stored in the Source Engine game directory. This is the $modelname path from your QC files, but without the model name). Must end with a trailing slash '/'",
+        default="mymodels/",
         maxlen=1024)
     QC_Src_Mats_Dir: bpy.props.StringProperty(
         name="Materials Path",
-        description="Path of the folder where your VMT and VTF files are stored in the Source Engine game directory (ie. the $cdmaterials path)",
-        default="models\mymodels\\",
+        description="Path of the folder where your VMT and VTF files are stored in the Source Engine game directory. This is the $cdmaterials path from your QC files.  Must end with a trailing slash '/'",
+        default="models/mymodels/",
         maxlen=1024)
     VMF_File: bpy.props.StringProperty(
         name="VMF File",
@@ -1202,7 +1203,7 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
 
 
 class Cleanup_ForceConvex(bpy.types.Operator):
-    """Forces all existing hulls in the selected object to be convex. Warning: Any non-manifold geometry will be removed by this operation"""
+    """Forces all existing hulls in the selected object to be convex. Warning: This operator will remove any non-manifold geometry, along with UV maps and vertex colors"""
     bl_idname = "object.src_eng_cleanup_force_convex"
     bl_label = "Force Convex"
     bl_options = {'REGISTER'}
@@ -1444,6 +1445,15 @@ class GenerateSourceQC(bpy.types.Operator):
             # Generate empty placeholder SMD
             with open(QC_folder + "Empty.smd", 'w') as empty_smd_file:
                 empty_smd_file.writelines(generate_SMD_lines())
+
+            # Generate the transparent physics VTF/VMT
+            shutil.copy(addon_path + "/phys.vtf", QC_folder + "/phys.vtf")
+            shutil.copy(addon_path + "/phys.vmt", QC_folder + "/phys.vmt")
+            with open(QC_folder + "/phys.vmt", 'r') as phys_vmt:
+                content = phys_vmt.read()
+            content = content.replace("models/", mats_dir)
+            with open(QC_folder + "/phys.vmt", 'w') as phys_vmt:
+                phys_vmt.write(content)
 
             display_msg_box("QC files generated successfully in " + QC_folder +
                             "\n\nYou will still need to export your collision models as SMD through other means (ie. Blender Source Tools or SourceOps)", "Info", "INFO")
