@@ -106,6 +106,11 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         description="Path of the folder where your VMT and VTF files are stored in the Source Engine game directory. This is the $cdmaterials path from your QC files.  Must end with a trailing slash '/'",
         default="models/mymodels/",
         maxlen=1024)
+    QC_SurfaceProp: bpy.props.StringProperty(
+        name="Surface Property",
+        description="The $surfaceprop setting to assign in the generated QC files. Can be left to default if you don't care about the type of footstep sounds that play when players walk on this collision",
+        default="default",
+        maxlen=40)
     VMF_File: bpy.props.StringProperty(
         name="VMF File",
         subtype="FILE_PATH",
@@ -280,11 +285,11 @@ def generate_SMD_lines():
     return empty_SMD_lines
 
 
-def generate_QC_lines(obj, models_dir, mats_dir):
+def generate_QC_lines(obj, models_dir, mats_dir, surfaceprop):
     QC_template = list()
     QC_template.append(f'$modelname "{models_dir}{obj.name}.mdl"\n')
     QC_template.append(f'$body {obj.name} "Empty.smd"\n')
-    QC_template.append('$surfaceprop default\n')
+    QC_template.append(f'$surfaceprop "{surfaceprop.lower()}"\n')
     QC_template.append('$staticprop\n')
     QC_template.append(f'$cdmaterials "{mats_dir}"\n')
     QC_template.append('$sequence ref "Empty.smd"\n')
@@ -1513,7 +1518,7 @@ class GenerateSourceQC(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-
+        surfaceprop = bpy.context.scene.SrcEngCollProperties.QC_SurfaceProp
         QC_folder = bpy.path.abspath(
             bpy.context.scene.SrcEngCollProperties.QC_Folder)
         models_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir
@@ -1553,7 +1558,7 @@ class GenerateSourceQC(bpy.types.Operator):
         for obj in objs:
             with open(f"{QC_folder}{obj.name}.qc", 'w') as qc_file:
                 qc_file.writelines(generate_QC_lines(
-                    obj, models_dir, mats_dir))
+                    obj, models_dir, mats_dir, surfaceprop))
 
         # Generate empty placeholder SMD
         with open(QC_folder + "Empty.smd", 'w') as empty_smd_file:
@@ -2095,6 +2100,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowQC4 = boxQC.row()
         rowQC5 = boxQC.row()
         rowQC6 = boxQC.row()
+        rowQC7 = boxQC.row()
 
         rowQC1.prop(bpy.context.scene.SrcEngCollProperties, "QC_Folder")
         rowQC2.prop(bpy.context.scene.SrcEngCollProperties,
@@ -2102,11 +2108,12 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowQC3.prop(bpy.context.scene.SrcEngCollProperties, "QC_Src_Mats_Dir")
         rowQC4.enabled = len(bpy.context.scene.SrcEngCollProperties.QC_Folder) > 0 and len(
             bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir) > 0 and len(bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir) > 0
-        rowQC4.operator("object.src_eng_qc")
-        rowQC5.prop(bpy.context.scene.SrcEngCollProperties, "VMF_File")
-        rowQC6.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Remove")
-        rowQC6.operator("object.src_eng_vmf_update")
-        rowQC6.enabled = len(
+        rowQC4.prop(bpy.context.scene.SrcEngCollProperties, "QC_SurfaceProp")
+        rowQC5.operator("object.src_eng_qc")
+        rowQC6.prop(bpy.context.scene.SrcEngCollProperties, "VMF_File")
+        rowQC7.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Remove")
+        rowQC7.operator("object.src_eng_vmf_update")
+        rowQC7.enabled = len(
             bpy.context.scene.SrcEngCollProperties.VMF_File) > 0
         
         # Export as Brushes
