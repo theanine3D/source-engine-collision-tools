@@ -17,7 +17,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 2, 1),
+    "version": (1, 3, 0),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -151,28 +151,18 @@ def display_msg_box(message="", title="Info", icon='INFO'):
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
-def check_for_selected(verbose=True):
-    ''' Checks if any valid mesh objects are selected, and returns True if so'''
+def check_for_selected():
+    ''' Checks if any valid mesh objects are selected, and returns a list of the objects if so. Otherwise, returns False'''
+    mesh_objs = list()
 
+    for o in bpy.context.selected_objects:
+        if o.type == "MESH" and not o.hide_get():
+            mesh_objs.append(o)
+    
     # Check if any objects are selected.
-    if len(bpy.context.selected_objects) == 1:
-        if bpy.context.active_object != None:
-            if bpy.context.active_object.type == "MESH":
-                return True
-            else:
-                if verbose:
-                    display_msg_box(
-                        "There is no active mesh object. Click on one and try again", "Error", "ERROR")
-                return False
-        else:
-            if verbose:
-                display_msg_box(
-                    "There is no active mesh object. Click on one and try again", "Error", "ERROR")
-            return False
+    if len(mesh_objs) >= 1:
+        return mesh_objs
     else:
-        if verbose:
-            display_msg_box(
-                "One mesh object must be selected and set as active", "Error", "ERROR")
         return False
 
 
@@ -308,8 +298,14 @@ def bmesh_walk_hull(vert):
     ''' Walk all un-tagged linked verts '''
     vert.tag = True
     yield(vert)
-    linked_verts = [e.other_vert(vert) for e in vert.link_edges
-                    if not e.other_vert(vert).tag]
+
+    linked_verts = list()
+    try:
+        for e in vert.link_edges:
+            if not e.other_vert(vert).tag:
+                linked_verts.append(e.other_vert(vert))
+    except:
+        pass
 
     for v in linked_verts:
         if v.tag:
@@ -384,185 +380,199 @@ class GenerateSrcCollision(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected():
-            total_hull_count = 0
-            root_collection = None
-            if 'Collision Models' in bpy.data.collections.keys():
-                root_collection = bpy.data.collections['Collision Models']
-            else:
-                root_collection = bpy.data.collections.new("Collision Models")
-                bpy.context.scene.collection.children.link(root_collection)
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
 
-            obj = bpy.context.active_object
-            obj_collections = [
-                c for c in bpy.data.collections if obj.name in c.objects.keys()]
+            return {'FINISHED'}
+
+        if len(objs) >= 1:
+            for obj in objs:
+                obj.select_set(False)
+
+            total_hull_count = 0
             extrude_modifier = (-1) * \
                 bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier
             merge_distance = bpy.context.scene.SrcEngCollProperties.Merge_Distance
 
-            obj_phys = None
-            collection_phys = None
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
+                root_collection = None
+                if 'Collision Models' in bpy.data.collections.keys():
+                    root_collection = bpy.data.collections['Collision Models']
+                else:
+                    root_collection = bpy.data.collections.new("Collision Models")
+                    bpy.context.scene.collection.children.link(root_collection)
 
-            bpy.ops.object.mode_set(mode="OBJECT")
+                obj_collections = [
+                    c for c in bpy.data.collections if obj.name in c.objects.keys()]
 
-            if (obj.name + "_phys") in bpy.data.objects.keys():
-                bpy.data.objects.remove(bpy.data.objects[obj.name + "_phys"])
+                obj_phys = None
+                collection_phys = None
 
-            bpy.ops.object.duplicate(linked=False)
-            obj.hide_set(True)
-            obj_phys = bpy.context.active_object
-            obj_phys.name = obj.name + "_phys"
+                bpy.ops.object.mode_set(mode="OBJECT")
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
 
-            bpy.ops.object.make_single_user(object=True, obdata=True)
-            bpy.ops.object.transform_apply(
-                location=True, rotation=True, scale=True)
-            bpy.ops.object.shade_smooth()
-            bpy.ops.object.mode_set(mode="EDIT")
-            bpy.ops.mesh.reveal()
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.mark_sharp(clear=True)
-            bpy.ops.mesh.remove_doubles(threshold=merge_distance)
-            if bpy.context.scene.SrcEngCollProperties.Dissolve:
-                bpy.ops.mesh.tris_convert_to_quads(
-                    seam=True, sharp=True, materials=True)
-                bpy.ops.mesh.dissolve_limited(
-                    angle_limit=0.0872665, delimit={'NORMAL'})
+                if (obj.name + "_phys") in bpy.data.objects.keys():
+                    bpy.data.objects.remove(bpy.data.objects[obj.name + "_phys"])
 
-            # Decimate and clean up mesh to minimize unnecessary hulls being generated later
-            bpy.ops.mesh.vert_connect_concave()
-            bpy.ops.mesh.face_make_planar(repeat=20)
-            bpy.ops.mesh.vert_connect_nonplanar()
-            bpy.ops.mesh.decimate(
-                ratio=bpy.context.scene.SrcEngCollProperties.Decimate_Ratio)
-            bpy.ops.mesh.vert_connect_concave()
-            bpy.ops.mesh.vert_connect_nonplanar()
+                bpy.ops.object.duplicate(linked=False)
+                obj.hide_set(True)
+                obj_phys = bpy.context.active_object
+                obj_phys.name = obj.name + "_phys"
 
-            bpy.ops.mesh.edge_split(type='VERT')
-            bpy.ops.mesh.select_all(action='SELECT')
-
-            # Extrude faces
-            bpy.ops.mesh.extrude_region_move(MESH_OT_extrude_region={"use_normal_flip": False, "use_dissolve_ortho_edges": False, "mirror": False}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
-                False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
-
-            # Move the extruded faces inward
-            bpy.context.scene.tool_settings.transform_pivot_point = 'INDIVIDUAL_ORIGINS'
-            bpy.ops.transform.shrink_fatten(value=(
-                extrude_modifier), use_even_offset=False, mirror=True, use_proportional_edit=False, snap=False)
-
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.normals_make_consistent(inside=False)
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.shade_smooth()
-
-            # Setup collection
-            if (obj_phys.name.lower()) in bpy.data.collections.keys():
-                collection_phys = bpy.data.collections[obj_phys.name.lower()]
-            else:
-                collection_phys = bpy.data.collections.new(obj_phys.name.lower())
-                root_collection.children.link(collection_phys)
-
-            collection_phys.objects.link(obj_phys)
-
-            # Unlink the new collision model from other collections
-            for c in obj_collections:
-                if obj_phys.name in c.objects.keys():
-                    c.objects.unlink(obj_phys)
-            if obj_phys.name in bpy.context.scene.collection.objects.keys():
-                bpy.context.scene.collection.objects.unlink(obj_phys)
-
-            bpy.ops.object.mode_set(mode='OBJECT')
-
-            # Begin Bmesh processing
-            me = obj_phys.data
-            bm = bmesh.new()
-            bm_processed = bmesh.new()
-
-            bm.from_mesh(me)
-            hulls = [hull for hull in bmesh_get_hulls(
-                bm, verts=bm.verts)]
-            print("Hulls to process:", len(hulls))
-
-            # Create individual hull bmeshes
-            for hull in hulls:
-                bm_hull = bmesh.new()
-
-                # Add vertices to individual bmesh hull
-                for vert in hull:
-                    bmesh.ops.create_vert(bm_hull, co=vert.co)
-
-                # Generate convex hull
-                ch = bmesh.ops.convex_hull(
-                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                bmesh.ops.delete(
-                    bm_hull,
-                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                    context='VERTS')
-
-                # Add the processed hull to the new main object, which will store all of them
-                bm_processed = bmesh_join(bm_processed, bm_hull)
-                total_hull_count += 1
-                bm_hull.clear()
-                bm_hull.free()
-
-            bm_processed.to_mesh(me)
-            me.update()
-            bm.clear()
-            bm.free()
-            bm_processed.clear()
-            bm_processed.free()
-
-            # End Bmesh processing
-
-            # Recombine into one object
-            bpy.ops.object.mode_set(mode='OBJECT')
-            obj_phys.name = obj.name.lower() + "_phys"
-            bpy.ops.object.shade_smooth()
-
-            # Remove non-manifold and degenerates
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_non_manifold()
-            bpy.ops.mesh.select_linked(delimit=set())
-            bpy.ops.mesh.delete(type='VERT')
-
-            # Cleanup materials
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.context.active_object.data.materials.clear()
-            if "phys" not in bpy.data.materials.keys():
-                bpy.data.materials.new("phys")
-            bpy.context.active_object.data.materials.append(
-                bpy.data.materials["phys"])
-            bpy.context.active_object.data.materials[0].diffuse_color = (
-                1, 0, 0.78315, 1)
-
-            # Finalize transforms
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
-            
-            # Optional post-merge
-            if bpy.context.scene.SrcEngCollProperties.Post_Merge:
-                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.object.make_single_user(object=True, obdata=True)
+                bpy.ops.object.transform_apply(
+                    location=True, rotation=True, scale=True)
+                bpy.ops.object.shade_smooth()
+                bpy.ops.object.mode_set(mode="EDIT")
+                bpy.ops.mesh.reveal()
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
                 bpy.ops.mesh.select_all(action='SELECT')
-                bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.mark_sharp(clear=True)
                 bpy.ops.mesh.remove_doubles(threshold=merge_distance)
+                if bpy.context.scene.SrcEngCollProperties.Dissolve:
+                    bpy.ops.mesh.tris_convert_to_quads(
+                        seam=True, sharp=True, materials=True)
+                    bpy.ops.mesh.dissolve_limited(
+                        angle_limit=0.0872665, delimit={'NORMAL'})
+
+                # Decimate and clean up mesh to minimize unnecessary hulls being generated later
+                bpy.ops.mesh.vert_connect_concave()
+                bpy.ops.mesh.face_make_planar(repeat=20)
+                bpy.ops.mesh.vert_connect_nonplanar()
+                bpy.ops.mesh.decimate(
+                    ratio=bpy.context.scene.SrcEngCollProperties.Decimate_Ratio)
+                bpy.ops.mesh.vert_connect_concave()
+                bpy.ops.mesh.vert_connect_nonplanar()
+
+                bpy.ops.mesh.edge_split(type='VERT')
+                bpy.ops.mesh.select_all(action='SELECT')
+
+                # Extrude faces
+                bpy.ops.mesh.extrude_region_move(MESH_OT_extrude_region={"use_normal_flip": False, "use_dissolve_ortho_edges": False, "mirror": False}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
+                    False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
+
+                # Move the extruded faces inward
+                bpy.context.scene.tool_settings.transform_pivot_point = 'INDIVIDUAL_ORIGINS'
+                bpy.ops.transform.shrink_fatten(value=(
+                    extrude_modifier), use_even_offset=False, mirror=True, use_proportional_edit=False, snap=False)
+
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.normals_make_consistent(inside=False)
                 bpy.ops.object.mode_set(mode='OBJECT')
-                bpy.ops.object.src_eng_cleanup_force_convex()
+                bpy.ops.object.shade_smooth()
+
+                # Setup collection
+                if (obj_phys.name.lower()) in bpy.data.collections.keys():
+                    collection_phys = bpy.data.collections[obj_phys.name.lower()]
+                else:
+                    collection_phys = bpy.data.collections.new(obj_phys.name.lower())
+                    root_collection.children.link(collection_phys)
+
+                collection_phys.objects.link(obj_phys)
+
+                # Unlink the new collision model from other collections
+                for c in obj_collections:
+                    if obj_phys.name in c.objects.keys():
+                        c.objects.unlink(obj_phys)
+                if obj_phys.name in bpy.context.scene.collection.objects.keys():
+                    bpy.context.scene.collection.objects.unlink(obj_phys)
+
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+                # Begin Bmesh processing
+                me = obj_phys.data
                 bm = bmesh.new()
+                bm_processed = bmesh.new()
 
                 bm.from_mesh(me)
                 hulls = [hull for hull in bmesh_get_hulls(
                     bm, verts=bm.verts)]
-                total_hull_count = len(hulls)
-            
+                print("Hulls to process:", len(hulls))
+
+                # Create individual hull bmeshes
+                for hull in hulls:
+                    bm_hull = bmesh.new()
+
+                    # Add vertices to individual bmesh hull
+                    for vert in hull:
+                        bmesh.ops.create_vert(bm_hull, co=vert.co)
+
+                    # Generate convex hull
+                    ch = bmesh.ops.convex_hull(
+                        bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                    bmesh.ops.delete(
+                        bm_hull,
+                        geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                        context='VERTS')
+
+                    # Add the processed hull to the new main object, which will store all of them
+                    bm_processed = bmesh_join(bm_processed, bm_hull)
+                    total_hull_count += 1
+                    bm_hull.clear()
+                    bm_hull.free()
+
+                bm_processed.to_mesh(me)
+                me.update()
+                bm.clear()
+                bm.free()
+                bm_processed.clear()
+                bm_processed.free()
+
+                # End Bmesh processing
+
+                # Recombine into one object
+                bpy.ops.object.mode_set(mode='OBJECT')
+                obj_phys.name = obj.name.lower() + "_phys"
+                bpy.ops.object.shade_smooth()
+
+                # Remove non-manifold and degenerates
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_non_manifold()
+                bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.delete(type='VERT')
+
+                # Cleanup materials
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.context.active_object.data.materials.clear()
+                if "phys" not in bpy.data.materials.keys():
+                    bpy.data.materials.new("phys")
+                bpy.context.active_object.data.materials.append(
+                    bpy.data.materials["phys"])
+                bpy.context.active_object.data.materials[0].diffuse_color = (
+                    1, 0, 0.78315, 1)
+
+                # Finalize transforms
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+                
+                # Optional post-merge
+                if bpy.context.scene.SrcEngCollProperties.Post_Merge:
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_all(action='SELECT')
+                    bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+                    bpy.ops.mesh.remove_doubles(threshold=merge_distance)
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    bpy.ops.object.src_eng_cleanup_force_convex()
+                    bm = bmesh.new()
+                    bm.from_mesh(bpy.context.active_object.data)
+                    total_hull_count = len([hull for hull in bmesh_get_hulls(bm, verts=bm.verts)])
+                    bm.clear()
+                    bm.free()
+                
             display_msg_box(
-                "Generated collision mesh with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
-            print("Generated collision mesh with total hull count of " +
-                  str(total_hull_count) + ".")
+                "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
+            print("Generated collision mesh(es) with total hull count of " +
+                str(total_hull_count) + ".")
 
         return {'FINISHED'}
     
@@ -582,164 +592,179 @@ class FractGenSrcCollision(bpy.types.Operator):
                 "You must first enable the Cell Fracture addon in your Blender preferences. It's required by this feature.", "Error", "ERROR")
             return {'FINISHED'}
         
-        if check_for_selected():
-           
-            root_collection = None
-            if 'Collision Models' in bpy.data.collections.keys():
-                root_collection = bpy.data.collections['Collision Models']
-            else:
-                root_collection = bpy.data.collections.new("Collision Models")
-                bpy.context.scene.collection.children.link(root_collection)
-            original_collection = bpy.context.collection
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
 
-            obj = bpy.context.active_object
-            obj_collections = [
-                c for c in bpy.data.collections if obj.name in c.objects.keys()]
+            return {'FINISHED'}
 
+        if len(objs) >= 1:
             fracture_target = bpy.context.scene.SrcEngCollProperties.Fracture_Target
             voxel_res = bpy.context.scene.SrcEngCollProperties.Voxel_Resolution
             gap_width = bpy.context.scene.SrcEngCollProperties.Gap_Width
             total_hull_count = 0
-            obj_phys = None
-            collection_phys = None
-
-            bpy.ops.object.mode_set(mode="OBJECT")
-
-            if (obj.name + "_phys") in bpy.data.objects.keys():
-                bpy.data.objects.remove(bpy.data.objects[obj.name + "_phys"])
-
-            obj_phys = obj.copy()
-            obj_phys.name = obj.name.lower() + "_phys"
-            bpy.context.collection.objects.link(obj_phys)
-            obj.select_set(False)
-            obj.hide_set(True)
-            obj_phys.select_set(True)
-            bpy.context.view_layer.objects.active = obj_phys
-
-            bpy.ops.object.make_single_user(object=True, obdata=True)
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
-            bpy.ops.object.shade_smooth()
-
-            # Voxel remesh
-            remesh = obj_phys.modifiers.new(name="RM", type="REMESH")
-            remesh.voxel_size = voxel_res
-            bpy.ops.object.convert(target='MESH')
             
-            # Cell Fracture, based on the Fracture Target set by user
-            bpy.ops.object.add_fracture_cell_objects(source={'VERT_OWN'}, source_limit=fracture_target, recursion=0, use_smooth_faces=False, use_sharp_edges=False, use_sharp_edges_apply=False, use_data_match=False, use_island_split=False, margin=gap_width, material_index=0, use_interior_vgroup=False, use_recenter=False, use_debug_redraw=False)
-            bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
-            bpy.ops.object.join()
-            bpy.data.objects.remove(obj_phys)
-            obj_phys = bpy.context.active_object
+            for obj in objs:
+                obj.select_set(False)
 
-            # Decimate loop
-            if len(obj.data.polygons) > 100:
-                while len(obj_phys.data.polygons) > (len(obj.data.polygons) * 1.5):
-                    bpy.ops.object.mode_set(mode="EDIT")
-                    bpy.ops.mesh.select_all(action='SELECT')
-                    bpy.ops.mesh.decimate(ratio=0.75)
-                    bpy.ops.mesh.select_all(action='DESELECT')
-                    bpy.ops.object.mode_set(mode="OBJECT")
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
 
-            # Limited dissolve
-            bpy.ops.object.mode_set(mode="EDIT")
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.dissolve_limited(
-                angle_limit=0.16, delimit={'NORMAL'})
-            bpy.ops.mesh.quads_convert_to_tris(
-                quad_method='BEAUTY', ngon_method='BEAUTY')
-            bpy.ops.object.mode_set(mode="OBJECT")
+                root_collection = None
+                if 'Collision Models' in bpy.data.collections.keys():
+                    root_collection = bpy.data.collections['Collision Models']
+                else:
+                    root_collection = bpy.data.collections.new("Collision Models")
+                    bpy.context.scene.collection.children.link(root_collection)
+                original_collection = bpy.context.collection
 
-            # Begin force convex
-            me = obj_phys.data
-            bm = bmesh.new()
-            bm_processed = bmesh.new()
+                obj_collections = [
+                    c for c in bpy.data.collections if obj.name in c.objects.keys()]
 
-            bm.from_mesh(me)
-            hulls = [hull for hull in bmesh_get_hulls(
-                bm, verts=bm.verts)]
-            print("Hulls to process:", len(hulls))
+                obj_phys = None
+                collection_phys = None
 
-            # Create individual hull bmeshes
-            for hull in hulls:
-                bm_hull = bmesh.new()
+                bpy.ops.object.mode_set(mode="OBJECT")
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
 
-                # Add vertices to individual bmesh hull
-                for vert in hull:
-                    bmesh.ops.create_vert(bm_hull, co=vert.co)
+                if (obj.name + "_phys") in bpy.data.objects.keys():
+                    bpy.data.objects.remove(bpy.data.objects[obj.name + "_phys"])
 
-                # Generate convex hull
-                ch = bmesh.ops.convex_hull(
-                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                bmesh.ops.delete(
-                    bm_hull,
-                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                    context='VERTS')
+                obj_phys = obj.copy()
+                obj_phys.name = obj.name.lower() + "_phys"
+                bpy.context.collection.objects.link(obj_phys)
+                obj.select_set(False)
+                obj.hide_set(True)
+                obj_phys.select_set(True)
+                bpy.context.view_layer.objects.active = obj_phys
 
-                # Add the processed hull to the new main object, which will store all of them
-                bmesh_join(bm_processed, bm_hull)
-                total_hull_count += 1
-                bm_hull.clear()
-                bm_hull.free()
+                bpy.ops.object.make_single_user(object=True, obdata=True)
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+                bpy.ops.object.shade_smooth()
 
-            bm_processed.to_mesh(me)
-            me.update()
-            bm.clear()
-            bm.free()
-            bm_processed.clear()
-            bm_processed.free()
-            # End force convex
+                # Voxel remesh
+                remesh = obj_phys.modifiers.new(name="RM", type="REMESH")
+                remesh.voxel_size = voxel_res
+                bpy.ops.object.convert(target='MESH')
+                
+                # Cell Fracture, based on the Fracture Target set by user
+                bpy.ops.object.add_fracture_cell_objects(source={'VERT_OWN'}, source_limit=fracture_target, recursion=0, use_smooth_faces=False, use_sharp_edges=False, use_sharp_edges_apply=False, use_data_match=False, use_island_split=False, margin=gap_width, material_index=0, use_interior_vgroup=False, use_recenter=False, use_debug_redraw=False)
+                bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+                bpy.ops.object.join()
+                bpy.data.objects.remove(obj_phys)
+                obj_phys = bpy.context.active_object
 
-            # Begin finalizing
-            bpy.ops.object.mode_set(mode='OBJECT')
-            obj_phys.name = obj.name.lower() + "_phys"
-            bpy.ops.object.shade_smooth()
-            obj.hide_set(True)
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
-            
-            # Setup collection
-            if (obj_phys.name.lower()) in bpy.data.collections.keys():
-                collection_phys = bpy.data.collections[obj_phys.name.lower()]
-            else:
-                collection_phys = bpy.data.collections.new(obj_phys.name)
-                root_collection.children.link(collection_phys)
+                # Decimate loop
+                if len(obj.data.polygons) > 100:
+                    while len(obj_phys.data.polygons) > (len(obj.data.polygons) * 1.5):
+                        bpy.ops.object.mode_set(mode="EDIT")
+                        bpy.ops.mesh.select_all(action='SELECT')
+                        bpy.ops.mesh.decimate(ratio=0.75)
+                        bpy.ops.mesh.select_all(action='DESELECT')
+                        bpy.ops.object.mode_set(mode="OBJECT")
 
-            if obj_phys.name not in collection_phys.objects.keys():
-                collection_phys.objects.link(obj_phys)
+                # Limited dissolve
+                bpy.ops.object.mode_set(mode="EDIT")
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.dissolve_limited(
+                    angle_limit=0.16, delimit={'NORMAL'})
+                bpy.ops.mesh.quads_convert_to_tris(
+                    quad_method='BEAUTY', ngon_method='BEAUTY')
+                bpy.ops.object.mode_set(mode="OBJECT")
 
-            # Unlink the new collision model from other collections
-            original_collection.objects.unlink(obj_phys)
-            for c in obj_collections:
-                if obj_phys.name in c.objects.keys():
-                    c.objects.unlink(obj_phys)
-            if obj_phys.name in bpy.context.scene.collection.objects.keys():
-                bpy.context.scene.collection.objects.unlink(obj_phys)
-            
-            # Restore original origin point
-            new_origin = tuple(obj.location)
-            bpy.context.scene.cursor.location = new_origin
-            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+                # Begin force convex
+                me = obj_phys.data
+                bm = bmesh.new()
+                bm_processed = bmesh.new()
 
-            # Remove non-manifold and degenerates
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_non_manifold()
-            bpy.ops.mesh.select_linked(delimit=set())
-            bpy.ops.mesh.delete(type='VERT')
-            
-            # Cleanup materials
-            bpy.ops.object.mode_set(mode='OBJECT')
-            obj_phys.data.materials.clear()
-            if "phys" not in bpy.data.materials.keys():
-                bpy.data.materials.new("phys")
-            obj_phys.data.materials.append(
-                bpy.data.materials["phys"])
-            obj_phys.data.materials[0].diffuse_color = (
-                1, 0, 0.78315, 1)
+                bm.from_mesh(me)
+                hulls = [hull for hull in bmesh_get_hulls(
+                    bm, verts=bm.verts)]
+                print("Hulls to process:", len(hulls))
+
+                # Create individual hull bmeshes
+                for hull in hulls:
+                    bm_hull = bmesh.new()
+
+                    # Add vertices to individual bmesh hull
+                    for vert in hull:
+                        bmesh.ops.create_vert(bm_hull, co=vert.co)
+
+                    # Generate convex hull
+                    ch = bmesh.ops.convex_hull(
+                        bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                    bmesh.ops.delete(
+                        bm_hull,
+                        geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                        context='VERTS')
+
+                    # Add the processed hull to the new main object, which will store all of them
+                    bmesh_join(bm_processed, bm_hull)
+                    total_hull_count += 1
+                    bm_hull.clear()
+                    bm_hull.free()
+
+                bm_processed.to_mesh(me)
+                me.update()
+                bm.clear()
+                bm.free()
+                bm_processed.clear()
+                bm_processed.free()
+                # End force convex
+
+                # Begin finalizing
+                bpy.ops.object.mode_set(mode='OBJECT')
+                obj_phys.name = obj.name.lower() + "_phys"
+                bpy.ops.object.shade_smooth()
+                obj.hide_set(True)
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+                
+                # Setup collection
+                if (obj_phys.name.lower()) in bpy.data.collections.keys():
+                    collection_phys = bpy.data.collections[obj_phys.name.lower()]
+                else:
+                    collection_phys = bpy.data.collections.new(obj_phys.name)
+                    root_collection.children.link(collection_phys)
+
+                if obj_phys.name not in collection_phys.objects.keys():
+                    collection_phys.objects.link(obj_phys)
+
+                # Unlink the new collision model from other collections
+                original_collection.objects.unlink(obj_phys)
+                for c in obj_collections:
+                    if obj_phys.name in c.objects.keys():
+                        c.objects.unlink(obj_phys)
+                if obj_phys.name in bpy.context.scene.collection.objects.keys():
+                    bpy.context.scene.collection.objects.unlink(obj_phys)
+                
+                # Restore original origin point
+                new_origin = tuple(obj.location)
+                bpy.context.scene.cursor.location = new_origin
+                bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+
+                # Remove non-manifold and degenerates
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_non_manifold()
+                bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.delete(type='VERT')
+                
+                # Cleanup materials
+                bpy.ops.object.mode_set(mode='OBJECT')
+                obj_phys.data.materials.clear()
+                if "phys" not in bpy.data.materials.keys():
+                    bpy.data.materials.new("phys")
+                obj_phys.data.materials.append(
+                    bpy.data.materials["phys"])
+                obj_phys.data.materials[0].diffuse_color = (
+                    1, 0, 0.78315, 1)
 
             display_msg_box(
                 "Generated collision mesh, with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
@@ -759,104 +784,123 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
     def execute(self, context):
 
-        if check_for_selected():
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
+
+            return {'FINISHED'}
+
+        if len(objs) >= 1:
             total_part_count = 0
-            root_collection = None
-            if 'Collision Models' in bpy.data.collections.keys():
-                root_collection = bpy.data.collections['Collision Models']
-            else:
-                root_collection = bpy.data.collections.new("Collision Models")
-                bpy.context.scene.collection.children.link(root_collection)
 
-            obj = bpy.context.active_object
-            bpy.ops.object.transform_apply(
-                location=True, rotation=True, scale=True)
-            original_name = obj.name
-            obj_collections = [
-                c for c in bpy.data.collections if obj.name in c.objects.keys()]
-            for c in obj_collections:
-                if "_part_" in c.name:
-                    display_msg_box(
-                        "Your selected collision mesh is inside a collection with '_part_' inside the name, indicating it's already split up. Rename the collection so that it ends in '_phys', and try again.", "Error", "ERROR")
-                    return {'FINISHED'}
-            if "_part_" in obj.name:
-                display_msg_box(
-                    "The collision model you're trying to split up already has '_part_' in its name, indicating that it's already been split up.\nRename the mesh object first so its name ends in '_phys' and try again.", "Error", "ERROR")
-                return {'FINISHED'}
+            for obj in objs:
+                obj.select_set(False)
 
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.mode_set(mode='EDIT')
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
 
-            # Separate all hulls into separate objects
-            bpy.ops.mesh.separate(type='LOOSE')
-            bpy.ops.object.mode_set(mode='OBJECT')
-
-            # Split up into 32-hull segments
-            hulls = bpy.context.selected_objects
-            hull_groups = list()
-
-            start = 0
-            end = len(hulls)
-            step = 32
-
-            for i in range(start, end, step):
-                x = i
-                hull_groups.append(hulls[x:x+step])
-
-            bpy.ops.object.select_all(action='DESELECT')
-
-            i = len(hull_groups)-1
-
-            while i >= 0:
-                i = len(hull_groups)-1
-                new_group_collection = None
-                for h in hull_groups[i]:
-                    h.select_set(True)
-
-                bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
-                bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
-                    False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
-                total_part_count += 1
-                bpy.ops.object.join()
-                new_group_obj = bpy.context.selected_objects[0]
-
-                bpy.context.view_layer.objects.active = new_group_obj
-                new_group_obj.name = original_name + "_part_" + str(i).zfill(3)
-
-                # Check if collection for this hull already exists. If not, create it
-                if new_group_obj.name not in bpy.data.collections.keys():
-                    new_group_collection = bpy.data.collections.new(
-                        new_group_obj.name)
+                root_collection = None
+                if 'Collision Models' in bpy.data.collections.keys():
+                    root_collection = bpy.data.collections['Collision Models']
                 else:
-                    new_group_collection = bpy.data.collections[new_group_obj.name]
+                    root_collection = bpy.data.collections.new("Collision Models")
+                    bpy.context.scene.collection.children.link(root_collection)
 
-                root_collection.children.link(new_group_collection)
-                for c in obj_collections:
-                    c.objects.unlink(new_group_obj)
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
 
-                new_group_collection.objects.link(new_group_obj)
                 bpy.ops.object.transform_apply(
                     location=True, rotation=True, scale=True)
-                new_group_obj.select_set(False)
+                original_name = obj.name
+                obj_collections = [
+                    c for c in bpy.data.collections if obj.name in c.objects.keys()]
+                
+                for c in obj_collections:
+                    if "_part_" in c.name:
+                        display_msg_box(
+                            "A selected collision mesh is inside a collection with '_part_' inside the name, indicating it's already split up. Rename the collection so that it ends in '_phys', and try again.", "Error", "ERROR")
+                        return {'FINISHED'}
+                if "_part_" in obj.name:
+                    display_msg_box(
+                        "A collision model you're trying to split up already has '_part_' in its name, indicating that it's already been split up.\nRename the mesh object first so its name ends in '_phys' and try again.", "Error", "ERROR")
+                    return {'FINISHED'}
 
-                hull_groups.pop()
-                if len(hull_groups) == 0:
-                    break
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.mode_set(mode='EDIT')
 
-            # Clean up
-            total_part_count = str(total_part_count)
+                # Separate all hulls into separate objects
+                bpy.ops.mesh.separate(type='LOOSE')
+                bpy.ops.object.mode_set(mode='OBJECT')
 
-            bpy.data.objects.remove(bpy.data.objects[original_name])
-            if original_name in bpy.data.collections.keys():
-                bpy.data.collections.remove(
-                    bpy.data.collections[original_name])
-            for o in bpy.data.objects:
-                if (original_name + ".") in o.name:
-                    bpy.data.objects.remove(o)
-            display_msg_box(
-                "Split up collision mesh into " + total_part_count + " part(s).", "Info", "INFO")
-            print("Split up collision mesh into " +
-                  total_part_count + " part(s).")
+                # Split up into 32-hull segments
+                hulls = bpy.context.selected_objects
+                hull_groups = list()
+
+                start = 0
+                end = len(hulls)
+                step = 32
+
+                for i in range(start, end, step):
+                    x = i
+                    hull_groups.append(hulls[x:x+step])
+
+                bpy.ops.object.select_all(action='DESELECT')
+
+                i = len(hull_groups)-1
+
+                while i >= 0:
+                    i = len(hull_groups)-1
+                    new_group_collection = None
+                    for h in hull_groups[i]:
+                        h.select_set(True)
+
+                    bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+                    bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'}, TRANSFORM_OT_translate={"value": (0, 0, 0), "orient_type": 'GLOBAL', "orient_matrix": ((0, 0, 0), (0, 0, 0), (0, 0, 0)), "orient_matrix_type": 'GLOBAL', "constraint_axis": (
+                        False, False, False), "mirror": False, "use_proportional_edit": False, "snap": False, "gpencil_strokes": False, "cursor_transform": False, "texture_space": False, "remove_on_cancel": False, "view2d_edge_pan": False, "release_confirm": False, "use_accurate": False, "use_automerge_and_split": False})
+                    total_part_count += 1
+                    bpy.ops.object.join()
+                    new_group_obj = bpy.context.selected_objects[0]
+
+                    bpy.context.view_layer.objects.active = new_group_obj
+                    new_group_obj.name = original_name + "_part_" + str(i).zfill(3)
+
+                    # Check if collection for this hull already exists. If not, create it
+                    if new_group_obj.name not in bpy.data.collections.keys():
+                        new_group_collection = bpy.data.collections.new(
+                            new_group_obj.name)
+                    else:
+                        new_group_collection = bpy.data.collections[new_group_obj.name]
+
+                    root_collection.children.link(new_group_collection)
+                    for c in obj_collections:
+                        c.objects.unlink(new_group_obj)
+
+                    new_group_collection.objects.link(new_group_obj)
+                    bpy.ops.object.transform_apply(
+                        location=True, rotation=True, scale=True)
+                    new_group_obj.select_set(False)
+
+                    hull_groups.pop()
+                    if len(hull_groups) == 0:
+                        break
+
+                # Clean up
+
+                bpy.data.objects.remove(bpy.data.objects[original_name])
+                if original_name in bpy.data.collections.keys():
+                    bpy.data.collections.remove(
+                        bpy.data.collections[original_name])
+                for o in bpy.data.objects:
+                    if (original_name + ".") in o.name:
+                        bpy.data.objects.remove(o)
+
+        total_part_count = str(total_part_count)
+        display_msg_box(
+            "Split up collision mesh into " + total_part_count + " part(s).", "Info", "INFO")
+        print("Split up collision mesh into " +
+                total_part_count + " part(s).")
 
         return {'FINISHED'}
 
@@ -870,211 +914,227 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected():
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
 
+            return {'FINISHED'}
+
+        if len(objs) >= 1:
             initial_hull_count = 0
             merged_count = 0
-            work_obj = bpy.context.active_object
             similarity_threshold = bpy.context.scene.SrcEngCollProperties.Similar_Factor
 
-            # Make sure no faces are selected
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.reveal()
-            bpy.ops.mesh.select_mode(type='FACE')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.transform_apply(
-                location=True, rotation=True, scale=True)
+            for obj in objs:
+                obj.select_set(False)
 
-            # Begin Bmesh processing
-            me = work_obj.data
-            bm = bmesh.new()
-            bm_processed = bmesh.new()
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
 
-            bm.from_mesh(me)
-            bm.verts.index_update()
-            bm.verts.ensure_lookup_table()
+                work_obj = obj
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+                
+                # Make sure no faces are selected
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.reveal()
+                bpy.ops.mesh.select_mode(type='FACE')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.transform_apply(
+                    location=True, rotation=True, scale=True)
 
-            hulls = [hull for hull in bmesh_get_hulls(
-                bm, verts=bm.verts)]
-            print("Hulls to process:", len(hulls))
-            hull_bm_list = list()
+                # Begin Bmesh processing
+                me = work_obj.data
+                bm = bmesh.new()
+                bm_processed = bmesh.new()
 
-            i = 0
-            # Create individual hull bmeshes
-            for hull in hulls:
-                bm_hull = bmesh.new()
+                bm.from_mesh(me)
+                bm.verts.index_update()
+                bm.verts.ensure_lookup_table()
 
-                # Add vertices to individual bmesh hull
-                for vert in hull:
-                    bmesh.ops.create_vert(bm_hull, co=vert.co)
-                bm_hull.verts.index_update()
-                bm_hull.verts.ensure_lookup_table()
+                hulls = [hull for hull in bmesh_get_hulls(
+                    bm, verts=bm.verts)]
+                print("Hulls to process:", len(hulls))
+                hull_bm_list = list()
 
-                # Generate convex hull
-                ch = bmesh.ops.convex_hull(
-                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                i = 0
+                # Create individual hull bmeshes
+                for hull in hulls:
+                    bm_hull = bmesh.new()
 
-                bmesh.ops.delete(
-                    bm_hull,
-                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                    context='FACES')
+                    # Add vertices to individual bmesh hull
+                    for vert in hull:
+                        bmesh.ops.create_vert(bm_hull, co=vert.co)
+                    bm_hull.verts.index_update()
+                    bm_hull.verts.ensure_lookup_table()
 
-                bmesh.ops.recalc_face_normals(bm_hull, faces=bm_hull.faces)
+                    # Generate convex hull
+                    ch = bmesh.ops.convex_hull(
+                        bm_hull, input=bm_hull.verts, use_existing_faces=False)
 
-                # Prepare for processing
-                bm_hull.verts.index_update()
-                bm_hull.edges.index_update()
-                bm_hull.faces.index_update()
-                bm_hull.verts.ensure_lookup_table()
-                bm_hull.edges.ensure_lookup_table()
-                bm_hull.faces.ensure_lookup_table()
-                bm_hull.transform(work_obj.matrix_world)
+                    bmesh.ops.delete(
+                        bm_hull,
+                        geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                        context='FACES')
 
-                # Add to bm list as a 4-element tuple - index, bm, volume, and face count
-                hull_bm_list.append((i, bm_hull, bm_hull.calc_volume(
-                    signed=False), len(bm_hull.faces)))
-                initial_hull_count += 1
-                i += 1
+                    bmesh.ops.recalc_face_normals(bm_hull, faces=bm_hull.faces)
 
-            if initial_hull_count == 1:
-                display_msg_box(
-                    "There is only one hull remaining in this collision mesh. Aborting...", "Info", "INFO")
-                return {'FINISHED'}
+                    # Prepare for processing
+                    bm_hull.verts.index_update()
+                    bm_hull.edges.index_update()
+                    bm_hull.faces.index_update()
+                    bm_hull.verts.ensure_lookup_table()
+                    bm_hull.edges.ensure_lookup_table()
+                    bm_hull.faces.ensure_lookup_table()
+                    bm_hull.transform(work_obj.matrix_world)
 
-            i = 0
-            # Compare hulls
-            for index1, bm1, vol1, facecount1 in hull_bm_list:
-                if index1 == None:
-                    continue
+                    # Add to bm list as a 4-element tuple - index, bm, volume, and face count
+                    hull_bm_list.append((i, bm_hull, bm_hull.calc_volume(
+                        signed=False), len(bm_hull.faces)))
+                    initial_hull_count += 1
+                    i += 1
 
-                for index2, bm2, vol2, facecount2 in hull_bm_list:
+                if initial_hull_count == 1:
+                    display_msg_box(
+                        "There is only one hull remaining in this collision mesh. Aborting...", "Info", "INFO")
+                    return {'FINISHED'}
 
-                    if index2 == index1:
+                i = 0
+                # Compare hulls
+                for index1, bm1, vol1, facecount1 in hull_bm_list:
+                    if index1 == None:
                         continue
-                    if index2 == None or index1 == None:
-                        continue
 
-                    # Compare volumes
-                    if vol2 >= (vol1 * similarity_threshold) and vol2 <= (vol1 * (1+(1-similarity_threshold))):
+                    for index2, bm2, vol2, facecount2 in hull_bm_list:
 
-                        # Compare face counts
-                        if facecount2 >= (facecount1 * similarity_threshold) and facecount2 <= (facecount1 * (1+(1-similarity_threshold))):
+                        if index2 == index1:
+                            continue
+                        if index2 == None or index1 == None:
+                            continue
 
-                            # Get center coordinate of both hulls
-                            bm1_origin_x = (
-                                sum(v.co[0] for v in bm2.verts)) / len(bm2.verts)
-                            bm1_origin_y = (sum(v.co[0]
-                                            for v in bm2.verts)) / 3
-                            bm1_origin_z = (sum(v.co[0]
-                                            for v in bm2.verts)) / 3
-                            bm1_origin = mathutils.Vector((bm1_origin_x, bm1_origin_y, bm1_origin_z))
+                        # Compare volumes
+                        if vol2 >= (vol1 * similarity_threshold) and vol2 <= (vol1 * (1+(1-similarity_threshold))):
 
-                            bm2_origin_x = (
-                                sum(v.co[0] for v in bm2.verts)) / len(bm2.verts)
-                            bm2_origin_y = (sum(v.co[0]
-                                            for v in bm2.verts)) / 3
-                            bm2_origin_z = (sum(v.co[0]
-                                            for v in bm2.verts)) / 3
-                            bm2_origin = mathutils.Vector((
-                                bm2_origin_x, bm2_origin_y, bm2_origin_z))
+                            # Compare face counts
+                            if facecount2 >= (facecount1 * similarity_threshold) and facecount2 <= (facecount1 * (1+(1-similarity_threshold))):
 
-                            # # Get distance between the two center coordinates
-                            distance = (bm1_origin - bm2_origin).length
+                                # Get center coordinate of both hulls
+                                bm1_origin_x = (
+                                    sum(v.co[0] for v in bm2.verts)) / len(bm2.verts)
+                                bm1_origin_y = (sum(v.co[0]
+                                                for v in bm2.verts)) / 3
+                                bm1_origin_z = (sum(v.co[0]
+                                                for v in bm2.verts)) / 3
+                                bm1_origin = mathutils.Vector((bm1_origin_x, bm1_origin_y, bm1_origin_z))
 
-                            # Check if hulls are close together
-                            if distance < ((vol1 ** (1/3)) * 2.5):
+                                bm2_origin_x = (
+                                    sum(v.co[0] for v in bm2.verts)) / len(bm2.verts)
+                                bm2_origin_y = (sum(v.co[0]
+                                                for v in bm2.verts)) / 3
+                                bm2_origin_z = (sum(v.co[0]
+                                                for v in bm2.verts)) / 3
+                                bm2_origin = mathutils.Vector((
+                                    bm2_origin_x, bm2_origin_y, bm2_origin_z))
 
-                                # Check if any verts overlap
-                                bm1_verts = [list(v.co) for v in bm1.verts]
-                                bm2_verts = [list(v.co) for v in bm2.verts]
+                                # # Get distance between the two center coordinates
+                                distance = (bm1_origin - bm2_origin).length
 
-                                for v in bm1_verts:
-                                    v[0] = round(v[0], 2)
-                                    v[1] = round(v[1], 2)
-                                    v[2] = round(v[2], 2)
-                                for v in bm2_verts:
-                                    v[0] = round(v[0], 2)
-                                    v[1] = round(v[1], 2)
-                                    v[2] = round(v[2], 2)
-                                overlap = [
-                                    v for v in bm1_verts if v in bm2_verts]
+                                # Check if hulls are close together
+                                if distance < ((vol1 ** (1/3)) * 2.5):
 
-                                # If any verts overlapped, then the hulls are adjacent!
-                                if len(overlap) > 0:
+                                    # Check if any verts overlap
+                                    bm1_verts = [list(v.co) for v in bm1.verts]
+                                    bm2_verts = [list(v.co) for v in bm2.verts]
 
-                                    print("Merging hull " + str(index1) +
-                                          " with hull " + str(index2))
+                                    for v in bm1_verts:
+                                        v[0] = round(v[0], 2)
+                                        v[1] = round(v[1], 2)
+                                        v[2] = round(v[2], 2)
+                                    for v in bm2_verts:
+                                        v[0] = round(v[0], 2)
+                                        v[1] = round(v[1], 2)
+                                        v[2] = round(v[2], 2)
+                                    overlap = [
+                                        v for v in bm1_verts if v in bm2_verts]
 
-                                    new_combined_bm = bmesh.new()
-                                    new_verts = [
-                                        v for v in bm1.verts] + [v for v in bm2.verts]
-                                    for v in new_verts:
-                                        bmesh.ops.create_vert(
-                                            new_combined_bm, co=v.co)
-                                    new_combined_bm.verts.index_update()
-                                    new_combined_bm.verts.ensure_lookup_table()
+                                    # If any verts overlapped, then the hulls are adjacent!
+                                    if len(overlap) > 0:
 
-                                    hull_bm_list[index1] = tuple((
-                                        None, None, None, None))
-                                    bm1.clear()
-                                    bm1.free()
-                                    hull_bm_list[index2] = tuple((
-                                        None, None, None, None))
-                                    bm2.clear()
-                                    bm2.free()
+                                        print("Merging hull " + str(index1) +
+                                            " with hull " + str(index2))
 
-                                    # Generate convex hull
-                                    ch = bmesh.ops.convex_hull(
-                                        new_combined_bm, input=new_combined_bm.verts, use_existing_faces=False)
+                                        new_combined_bm = bmesh.new()
+                                        new_verts = [
+                                            v for v in bm1.verts] + [v for v in bm2.verts]
+                                        for v in new_verts:
+                                            bmesh.ops.create_vert(
+                                                new_combined_bm, co=v.co)
+                                        new_combined_bm.verts.index_update()
+                                        new_combined_bm.verts.ensure_lookup_table()
 
-                                    junk_geometry = list(
-                                        set(ch["geom_unused"] + ch["geom_interior"]))
-                                    bmesh.ops.delete(
-                                        new_combined_bm, geom=junk_geometry, context='VERTS')
+                                        hull_bm_list[index1] = tuple((
+                                            None, None, None, None))
+                                        bm1.clear()
+                                        bm1.free()
+                                        hull_bm_list[index2] = tuple((
+                                            None, None, None, None))
+                                        bm2.clear()
+                                        bm2.free()
 
-                                    # Join the hull with the main hull containing all of them
-                                    bmesh_join(bm_processed, new_combined_bm)
-                                    new_combined_bm.clear()
-                                    new_combined_bm.free()
-                                    break
+                                        # Generate convex hull
+                                        ch = bmesh.ops.convex_hull(
+                                            new_combined_bm, input=new_combined_bm.verts, use_existing_faces=False)
 
-            # Get quick count of how many hulls were merged
-            merged_count = len([h[0] for h in hull_bm_list if h[0] == None])
+                                        junk_geometry = list(
+                                            set(ch["geom_unused"] + ch["geom_interior"]))
+                                        bmesh.ops.delete(
+                                            new_combined_bm, geom=junk_geometry, context='VERTS')
 
-            # Re-add hulls that were never merged
-            unmerged_hulls = [
-                bm_unmerged[1] for bm_unmerged in hull_bm_list if None not in bm_unmerged]
+                                        # Join the hull with the main hull containing all of them
+                                        bmesh_join(bm_processed, new_combined_bm)
+                                        new_combined_bm.clear()
+                                        new_combined_bm.free()
+                                        break
 
-            for unmerged_hull in unmerged_hulls:
-                bmesh_join(bm_processed, unmerged_hull)
-                unmerged_hull.clear()
-                unmerged_hull.free()
+                # Get quick count of how many hulls were merged
+                merged_count = len([h[0] for h in hull_bm_list if h[0] == None])
 
-            # Finally update mesh
-            bm_processed.to_mesh(me)
-            me.update()
-            bm.clear()
-            bm.free()
-            bm_processed.clear()
-            bm_processed.free()
+                # Re-add hulls that were never merged
+                unmerged_hulls = [
+                    bm_unmerged[1] for bm_unmerged in hull_bm_list if None not in bm_unmerged]
 
-            # End Bmesh processing
+                for unmerged_hull in unmerged_hulls:
+                    bmesh_join(bm_processed, unmerged_hull)
+                    unmerged_hull.clear()
+                    unmerged_hull.free()
 
-            # Cleanup mesh
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.shade_smooth()
+                # Finally update mesh
+                bm_processed.to_mesh(me)
+                me.update()
+                bm.clear()
+                bm.free()
+                bm_processed.clear()
+                bm_processed.free()
 
-            # Reset dimensions and apply final transforms
-            bpy.ops.object.transform_apply(
-                location=True, rotation=True, scale=True)
+                # End Bmesh processing
+
+                # Cleanup mesh
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.shade_smooth()
+
+                # Reset dimensions and apply final transforms
+                bpy.ops.object.transform_apply(
+                    location=True, rotation=True, scale=True)
 
             display_msg_box(
                 "Processed original " + str(initial_hull_count) + " hull(s).\nMerged " + str(merged_count) + " total hull(s).", "Info", "INFO")
@@ -1093,105 +1153,121 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected():
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
+
+            return {'FINISHED'}
+
+        if len(objs) >= 1:
+            amount_removed = 0
             thin_threshold = bpy.context.scene.SrcEngCollProperties.Thin_Threshold
+            for obj in objs:
+                obj.select_set(False)
 
-            obj = bpy.context.active_object
-            original_name = obj.name
-            total_hull_count = 0
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
 
-            # Make sure no faces are selected
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.reveal()
-            bpy.ops.mesh.select_mode(type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+                original_name = obj.name
+                total_hull_count = 0
 
-            # Select all hulls and separate them into separate objects
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.dissolve_limited(
-                angle_limit=0.0872665, delimit={'NORMAL'})
-            bpy.ops.mesh.quads_convert_to_tris(
-                quad_method='BEAUTY', ngon_method='BEAUTY')
-            bpy.ops.mesh.normals_make_consistent(inside=False)
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
+                # Make sure no faces are selected
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.reveal()
+                bpy.ops.mesh.select_mode(type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
 
-            # Begin Bmesh processing
-            me = obj.data
-            bm = bmesh.new()
-            bm_processed = bmesh.new()
+                # Select all hulls and separate them into separate objects
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.dissolve_limited(
+                    angle_limit=0.0872665, delimit={'NORMAL'})
+                bpy.ops.mesh.quads_convert_to_tris(
+                    quad_method='BEAUTY', ngon_method='BEAUTY')
+                bpy.ops.mesh.normals_make_consistent(inside=False)
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
 
-            bm.from_mesh(me)
-            hulls = [hull for hull in bmesh_get_hulls(
-                bm, verts=bm.verts)]
-            print("Hulls to process:", len(hulls))
+                # Begin Bmesh processing
+                me = obj.data
+                bm = bmesh.new()
+                bm_processed = bmesh.new()
 
-            hulls_to_check = list()
+                bm.from_mesh(me)
+                hulls = [hull for hull in bmesh_get_hulls(
+                    bm, verts=bm.verts)]
+                print("Hulls to process:", len(hulls))
 
-            # Create individual hull bmeshes
-            for hull in hulls:
-                bm_hull = bmesh.new()
+                hulls_to_check = list()
 
-                # Add vertices to individual bmesh hull
-                for vert in hull:
-                    bmesh.ops.create_vert(bm_hull, co=vert.co)
+                # Create individual hull bmeshes
+                for hull in hulls:
+                    bm_hull = bmesh.new()
 
-                # Generate convex hull
-                ch = bmesh.ops.convex_hull(
-                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                bmesh.ops.delete(
-                    bm_hull,
-                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                    context='VERTS')
+                    # Add vertices to individual bmesh hull
+                    for vert in hull:
+                        bmesh.ops.create_vert(bm_hull, co=vert.co)
 
-                # Add the processed hull to list for volume checking
-                hulls_to_check.append(bm_hull)
+                    # Generate convex hull
+                    ch = bmesh.ops.convex_hull(
+                        bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                    bmesh.ops.delete(
+                        bm_hull,
+                        geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                        context='VERTS')
 
-            avg_volume = sum([bm_hull.calc_volume(signed=False)
-                             for bm_hull in hulls_to_check]) / len(hulls_to_check)
+                    # Add the processed hull to list for volume checking
+                    hulls_to_check.append(bm_hull)
 
-            # Check volume if below threshold
-            for bm_hull in hulls_to_check:
-                vol = bm_hull.calc_volume(signed=False)
-                if vol > (thin_threshold * avg_volume):
-                    bmesh_join(bm_processed, bm_hull)
-                    total_hull_count += 1
-                bm_hull.clear()
-                bm_hull.free()
+                avg_volume = sum([bm_hull.calc_volume(signed=False)
+                                for bm_hull in hulls_to_check]) / len(hulls_to_check)
 
-            bm_processed.to_mesh(me)
-            me.update()
-            bm.clear()
-            bm.free()
-            bm_processed.clear()
-            bm_processed.free()
+                # Check volume if below threshold
+                for bm_hull in hulls_to_check:
+                    vol = bm_hull.calc_volume(signed=False)
+                    if vol > (thin_threshold * avg_volume):
+                        bmesh_join(bm_processed, bm_hull)
+                        total_hull_count += 1
+                    bm_hull.clear()
+                    bm_hull.free()
 
-            # End Bmesh processing
+                bm_processed.to_mesh(me)
+                me.update()
+                bm.clear()
+                bm.free()
+                bm_processed.clear()
+                bm_processed.free()
 
-            # Rejoin and clean up
-            bpy.context.active_object.name = original_name
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
-            bpy.ops.object.shade_smooth()
+                # End Bmesh processing
 
-            # Remove non-manifolds
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_non_manifold()
-            bpy.ops.mesh.select_linked(delimit=set())
-            bpy.ops.mesh.delete(type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.normals_make_consistent(inside=False)
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            amount_removed = len(hulls_to_check) - total_hull_count
+                # Rejoin and clean up
+                bpy.context.active_object.name = original_name
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+                bpy.ops.object.shade_smooth()
+
+                # Remove non-manifolds
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_non_manifold()
+                bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.delete(type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.normals_make_consistent(inside=False)
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+                amount_removed += len(hulls_to_check) - total_hull_count
             display_msg_box(
                 "Removed " + str(amount_removed) + " hull(s)", "Info", "INFO")
             print(
@@ -1209,92 +1285,108 @@ class Cleanup_ForceConvex(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected():
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
 
-            obj = bpy.context.active_object
-            original_name = obj.name
+            return {'FINISHED'}
+
+        if len(objs) >= 1:
+            for obj in objs:
+                obj.select_set(False)
+
             total_hull_count = 0
 
-            # Make sure no faces are selected
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.reveal()
-            bpy.ops.mesh.select_mode(type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
 
-            # Select all hulls and separate them into separate objects
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.dissolve_limited(
-                angle_limit=0.0872665, delimit={'NORMAL'})
-            bpy.ops.mesh.quads_convert_to_tris(
-                quad_method='BEAUTY', ngon_method='BEAUTY')
-            bpy.ops.mesh.normals_make_consistent(inside=False)
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
 
-            # Begin Bmesh processing
-            me = obj.data
-            bm = bmesh.new()
-            bm_processed = bmesh.new()
+                original_name = obj.name
 
-            bm.from_mesh(me)
-            hulls = [hull for hull in bmesh_get_hulls(
-                bm, verts=bm.verts)]
-            print("Hulls to process:", len(hulls))
+                # Make sure no faces are selected
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.reveal()
+                bpy.ops.mesh.select_mode(type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
 
-            # Create individual hull bmeshes
-            for hull in hulls:
-                bm_hull = bmesh.new()
+                # Select all hulls and separate them into separate objects
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.dissolve_limited(
+                    angle_limit=0.0872665, delimit={'NORMAL'})
+                bpy.ops.mesh.quads_convert_to_tris(
+                    quad_method='BEAUTY', ngon_method='BEAUTY')
+                bpy.ops.mesh.normals_make_consistent(inside=False)
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
 
-                # Add vertices to individual bmesh hull
-                for vert in hull:
-                    bmesh.ops.create_vert(bm_hull, co=vert.co)
+                # Begin Bmesh processing
+                me = obj.data
+                bm = bmesh.new()
+                bm_processed = bmesh.new()
 
-                # Generate convex hull
-                ch = bmesh.ops.convex_hull(
-                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                bmesh.ops.delete(
-                    bm_hull,
-                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                    context='VERTS')
+                bm.from_mesh(me)
+                hulls = [hull for hull in bmesh_get_hulls(
+                    bm, verts=bm.verts)]
+                print("Hulls to process:", len(hulls))
 
-                # Add the processed hull to the new main object, which will store all of them
-                bmesh_join(bm_processed, bm_hull)
-                total_hull_count += 1
-                bm_hull.clear()
-                bm_hull.free()
+                # Create individual hull bmeshes
+                for hull in hulls:
+                    bm_hull = bmesh.new()
 
-            bm_processed.to_mesh(me)
-            me.update()
-            bm.clear()
-            bm.free()
-            bm_processed.clear()
-            bm_processed.free()
+                    # Add vertices to individual bmesh hull
+                    for vert in hull:
+                        bmesh.ops.create_vert(bm_hull, co=vert.co)
 
-            # End Bmesh processing
+                    # Generate convex hull
+                    ch = bmesh.ops.convex_hull(
+                        bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                    bmesh.ops.delete(
+                        bm_hull,
+                        geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                        context='VERTS')
 
-            # Rejoin and clean up
-            bpy.context.active_object.name = original_name
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
-            bpy.ops.object.shade_smooth()
+                    # Add the processed hull to the new main object, which will store all of them
+                    bmesh_join(bm_processed, bm_hull)
+                    total_hull_count += 1
+                    bm_hull.clear()
+                    bm_hull.free()
 
-            # Remove non-manifolds
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_mode(
-                use_extend=False, use_expand=False, type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_non_manifold()
-            bpy.ops.mesh.select_linked(delimit=set())
-            bpy.ops.mesh.delete(type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.normals_make_consistent(inside=False)
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
+                bm_processed.to_mesh(me)
+                me.update()
+                bm.clear()
+                bm.free()
+                bm_processed.clear()
+                bm_processed.free()
+
+                # End Bmesh processing
+
+                # Rejoin and clean up
+                obj.name = original_name
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+                bpy.ops.object.shade_smooth()
+
+                # Remove non-manifolds
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_non_manifold()
+                bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.delete(type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.normals_make_consistent(inside=False)
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
             display_msg_box(
                 "Processed " + str(total_hull_count) + " hulls.", "Info", "INFO")
 
@@ -1310,86 +1402,103 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
 
-        if check_for_selected():
+            return {'FINISHED'}
 
-            original_name = bpy.context.active_object.name
-            # Make sure no faces are selected
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.reveal()
-            bpy.ops.mesh.select_mode(type='VERT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
+        if len(objs) >= 1:
+            for obj in objs:
+                obj.select_set(False)
 
-            # Select all hulls and separate them into separate objects
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.separate(type='LOOSE')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.origin_set(
-                type='ORIGIN_GEOMETRY', center='MEDIAN')
+            amount_to_remove = 0
 
-            hulls = [o for o in bpy.context.selected_objects]
-            hulls_to_delete = set()
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
 
-            for outer_hull in hulls:
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
 
-                # Get bounding box lowest and highest vertices - to check if inner hull is inside it later
-                hull_bbox_min = outer_hull.matrix_world @ mathutils.Vector(
-                    outer_hull.bound_box[0])
-                hull_bbox_max = outer_hull.matrix_world @ mathutils.Vector(
-                    outer_hull.bound_box[6])
+                original_name = obj.name
+                # Make sure no faces are selected
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.reveal()
+                bpy.ops.mesh.select_mode(type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
 
-                def check_inside_bbox(h):
-                    loc = h.location
-                    if hull_bbox_min[0] < loc[0] and hull_bbox_max[0] > loc[0]:
-                        if hull_bbox_min[1] < loc[1] and hull_bbox_max[1] > loc[1]:
-                            if hull_bbox_min[2] < loc[2] and hull_bbox_max[2] > loc[2]:
-                                return True
-                    else:
-                        return False
+                # Select all hulls and separate them into separate objects
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.separate(type='LOOSE')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.origin_set(
+                    type='ORIGIN_GEOMETRY', center='MEDIAN')
 
-                # Create list of hulls that are smalller than this hull and within the outer hull's bounding box
-                hulls_to_check = [h for h in hulls if h != outer_hull and h.dimensions <
-                                  outer_hull.dimensions and check_inside_bbox(h)]
+                hulls = [o for o in bpy.context.selected_objects]
+                hulls_to_delete = set()
 
-                for inner_hull in hulls_to_check:
-                    inner_hull_loc = inner_hull.location
-                    outer_hull_faces = outer_hull.data.polygons
+                for outer_hull in hulls:
 
-                    # This returns a list of frontface indices. Backfaces are not included
-                    frontfaces = [f.index for f in outer_hull_faces if f.normal.dot(
-                        inner_hull_loc - (outer_hull.matrix_world @ f.center)) > 0]
+                    # Get bounding box lowest and highest vertices - to check if inner hull is inside it later
+                    hull_bbox_min = outer_hull.matrix_world @ mathutils.Vector(
+                        outer_hull.bound_box[0])
+                    hull_bbox_max = outer_hull.matrix_world @ mathutils.Vector(
+                        outer_hull.bound_box[6])
 
-                    # Zero length means no frontfaces were visible - aka inner hull truly is inside outer hull
-                    if len(frontfaces) == 0:
+                    def check_inside_bbox(h):
+                        loc = h.location
+                        if hull_bbox_min[0] < loc[0] and hull_bbox_max[0] > loc[0]:
+                            if hull_bbox_min[1] < loc[1] and hull_bbox_max[1] > loc[1]:
+                                if hull_bbox_min[2] < loc[2] and hull_bbox_max[2] > loc[2]:
+                                    return True
+                        else:
+                            return False
 
-                        # Mark the hull for deletion if it's inside another hull
-                        hulls_to_delete.add(inner_hull)
-                    else:
-                        continue
+                    # Create list of hulls that are smalller than this hull and within the outer hull's bounding box
+                    hulls_to_check = [h for h in hulls if h != outer_hull and h.dimensions <
+                                    outer_hull.dimensions and check_inside_bbox(h)]
 
-            bpy.ops.object.mode_set(mode='OBJECT')
+                    for inner_hull in hulls_to_check:
+                        inner_hull_loc = inner_hull.location
+                        outer_hull_faces = outer_hull.data.polygons
 
-            amount_to_remove = str(len(hulls_to_delete))
+                        # This returns a list of frontface indices. Backfaces are not included
+                        frontfaces = [f.index for f in outer_hull_faces if f.normal.dot(
+                            inner_hull_loc - (outer_hull.matrix_world @ f.center)) > 0]
 
-            # Remove marked hulls
-            for h in hulls_to_delete:
-                bpy.data.objects.remove(h)
+                        # Zero length means no frontfaces were visible - aka inner hull truly is inside outer hull
+                        if len(frontfaces) == 0:
 
-            # Rejoin and clean up
-            bpy.ops.object.join()
-            bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+                            # Mark the hull for deletion if it's inside another hull
+                            hulls_to_delete.add(inner_hull)
+                        else:
+                            continue
 
-            bpy.context.active_object.name = original_name
-            bpy.ops.object.transform_apply(
-                location=False, rotation=True, scale=True)
-            bpy.ops.object.shade_smooth()
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+                amount_to_remove += len(hulls_to_delete)
+
+                # Remove marked hulls
+                for h in hulls_to_delete:
+                    bpy.data.objects.remove(h)
+
+                # Rejoin and clean up
+                bpy.ops.object.join()
+                bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+
+                bpy.context.active_object.name = original_name
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+                bpy.ops.object.shade_smooth()
 
             display_msg_box(
-                "Removed " + amount_to_remove + " hull(s).", "Info", "INFO")
-            print("Removed " + amount_to_remove + " hull(s).")
+                "Removed " + str(amount_to_remove) + " hull(s).", "Info", "INFO")
+            print("Removed " + str(amount_to_remove) + " hull(s).")
 
         return {'FINISHED'}
 
@@ -1397,7 +1506,7 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
 
 
 class GenerateSourceQC(bpy.types.Operator):
-    """Generate QC files used by Source Engine to compile the collision model(s) in the currently active collection"""
+    """Generate QC files for all collision meshes stored in the Collision Models collection in your Blender file. These QC files can be used to compile the models for Source Engine"""
     bl_idname = "object.src_eng_qc"
     bl_label = "Generate Source Engine QC"
     bl_options = {'REGISTER'}
@@ -1495,7 +1604,6 @@ class RecommendedCollSettings(bpy.types.Operator):
         return {'FINISHED'}
 
 # Update VMF operator
-
 
 class UpdateVMF(bpy.types.Operator):
     """Automatically adds any split-up (ie. mymodel_part_000.mdl) collision models in the 'Collision Models' collection to the VMF, if they aren't already contained in it. IMPORTANT: The first part, '_part_000.mdl' must be added manually to VMF"""
@@ -1664,9 +1772,7 @@ class UpdateVMF(bpy.types.Operator):
         return {'FINISHED'}
 
 
-
 # Update VMF operator
-
 
 class ExportVMF(bpy.types.Operator):
     """Converts all selected collision mesh objects into Hammer brushes and exports them as a single VMF file"""
@@ -1675,138 +1781,158 @@ class ExportVMF(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        if check_for_selected():
-
-            total_hull_count = 0
-            vmf_export_dir = bpy.context.scene.SrcEngCollProperties.VMF_Export_Dir
-            if vmf_export_dir == "" or vmf_export_dir == "//":
-                display_msg_box(
-                    f"ERROR: You need to choose an export folder above first. Choose one and then try again.", "Error", "ERROR")
-                return {'FINISHED'}
-
-            vmf_texture = bpy.context.scene.SrcEngCollProperties.VMF_Texture
-            
-            # Prep the meshes first
-            obj = bpy.context.active_object
-            obj_phys = None
-
-            bpy.ops.object.mode_set(mode="OBJECT")
-            bpy.ops.object.duplicate(linked=False)
-
-            obj_phys = bpy.context.active_object
-            mesh = obj_phys.data
-
-            # Snap vertices to grid scale of 1
-            for vert in mesh.vertices:
-                vert.co.x = round(vert.co.x)
-                vert.co.y = round(vert.co.y)
-                vert.co.z = round(vert.co.z)
-
-            # Update the mesh
-            mesh.update()
-
-            bpy.ops.object.src_eng_cleanup_force_convex()
-
-            # Begin Bmesh processing
-            bm = bmesh.new()
-            bm.from_mesh(obj_phys.data)
-            bm.faces.ensure_lookup_table()
-
-            # Tag all faces as unvisited
-            for face in bm.faces:
-                face.tag = False
-
-            islands = []
-
-
-            for face in bm.faces:
-                # Skip already visited faces
-                if face.tag:
-                    continue
-
-                # New island
-                island = []
-                faces_to_visit = [face]
-
-                while faces_to_visit:
-                    current_face = faces_to_visit.pop()
-                    current_face.tag = True
-
-                    # Process triangle faces
-                    if len(current_face.verts) == 3:
-                        vertices = [current_face.verts[i].co.copy() for i in range(3)]
-                        island.append(vertices)
-
-                    # Visit adjacent faces
-                    for edge in current_face.edges:
-                        for linked_face in edge.link_faces:
-                            if not linked_face.tag:
-                                faces_to_visit.append(linked_face)
-
-                islands.append(island)
-                total_hull_count += 1
-
-            bm.free()
-            bpy.data.objects.remove(obj_phys)
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj
-
-            # VMF Setup
-            vmf = new_vmf()
-            solids_to_add = []
-            print(f"\n\n[VMF Export] Total island count: {len(islands)}")
-
-            for island in islands:
-
-                sides_to_add = []
-
-                print(f"[VMF Export] Total triangle count in island: {len(island)}")
-
-                for triangle in island:
-                    new_side = Side()
-
-                    # A Hammer brush's "side" is basically the equivalent of a Blender triangle
-                    new_side.plane[0].x, new_side.plane[0].z, new_side.plane[0].y = int(round(triangle[0][0],0)), int(round(triangle[0][1],0)) * -1, int(round(triangle[0][2],0))
-                    new_side.plane[1].x, new_side.plane[1].z, new_side.plane[1].y = int(round(triangle[1][0],0)), int(round(triangle[1][1],0)) * -1, int(round(triangle[1][2],0))
-                    new_side.plane[2].x, new_side.plane[2].z, new_side.plane[2].y = int(round(triangle[2][0],0)), int(round(triangle[2][1],0)) * -1, int(round(triangle[2][2],0))
-                    new_side.plane[0], new_side.plane[2] = new_side.plane[2], new_side.plane[0]
-                    sides_to_add.append(new_side)
-
-                print(f"[VMF Export] Total side count: {len(sides_to_add)}")
-                print(f"[VMF Export] VMF Texture to set: {vmf_texture}")
-
-                new_solid = Solid()
-
-                print(f"[VMF Export] Texture now set: {new_solid.has_texture('tools/toolsnodraw')}")
-
-                for side in sides_to_add:
-                    new_solid.add_sides(side)
-
-                new_solid.set_texture(vmf_texture)
-                solids_to_add.append(new_solid)
-
-                print(f"[VMF Export] Added {len(sides_to_add)} sides to solid")
-            
-            for solid in solids_to_add:
-                vmf.add_solids(solid)
-            print(f"[VMF Export] Added {len(solids_to_add)} solids to VMF")
-
-            import time
-            export_path = os.path.join(bpy.path.abspath(vmf_export_dir), time.strftime("%Y%m%d-%H%M%S")) + "" + ".vmf"
-            print("Export path: " + export_path)
-            
-            try:
-                vmf.export(export_path)
-            except Exception as e:
-                display_msg_box(
-                    f"Couldn't write VMF due to following:\n{e}", "Info", "INFO")
-                print(f"ERROR: Couldn't write VMF due to following:\n{e}")
-
-                return {'FINISHED'}
-
-            print(f"[VMF Export] {len(solids_to_add)} solids exported successfully to VMF folder as:\n{os.path.split(export_path)[1]}\n\n")
+        vmf_export_dir = bpy.context.scene.SrcEngCollProperties.VMF_Export_Dir
+        if vmf_export_dir == "" or vmf_export_dir == "//":
             display_msg_box(
-                f"{len(solids_to_add)} solids exported successfully to VMF folder as:\n{os.path.split(export_path)[1]}", "Info", "INFO")
+                f"ERROR: You need to choose an export folder above first. Choose one and then try again.", "Error", "ERROR")
+            return {'FINISHED'}
+        
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
+
+            return {'FINISHED'}
+
+        if len(objs) >= 1:
+            obj_index = 0
+            total_hull_count = 0
+            total_solids_count = 0
+            vmf_texture = bpy.context.scene.SrcEngCollProperties.VMF_Texture
+
+            for obj in objs:
+                obj.select_set(False)
+
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
+              
+                # Prep the meshes first
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+                obj_phys = None
+
+                bpy.ops.object.mode_set(mode="OBJECT")
+                bpy.ops.object.duplicate(linked=False)
+
+                obj_phys = bpy.context.active_object
+                mesh = obj_phys.data
+
+                # Snap vertices to grid scale of 1
+                for vert in mesh.vertices:
+                    vert.co.x = round(vert.co.x)
+                    vert.co.y = round(vert.co.y)
+                    vert.co.z = round(vert.co.z)
+
+                # Update the mesh
+                mesh.update()
+
+                bpy.ops.object.src_eng_cleanup_force_convex()
+
+                # Begin Bmesh processing
+                bm = bmesh.new()
+                bm.from_mesh(obj_phys.data)
+                bm.faces.ensure_lookup_table()
+
+                # Tag all faces as unvisited
+                for face in bm.faces:
+                    face.tag = False
+
+                islands = []
+
+
+                for face in bm.faces:
+                    # Skip already visited faces
+                    if face.tag:
+                        continue
+
+                    # New island
+                    island = []
+                    faces_to_visit = [face]
+
+                    while faces_to_visit:
+                        current_face = faces_to_visit.pop()
+                        current_face.tag = True
+
+                        # Process triangle faces
+                        if len(current_face.verts) == 3:
+                            vertices = [current_face.verts[i].co.copy() for i in range(3)]
+                            island.append(vertices)
+
+                        # Visit adjacent faces
+                        for edge in current_face.edges:
+                            for linked_face in edge.link_faces:
+                                if not linked_face.tag:
+                                    faces_to_visit.append(linked_face)
+
+                    islands.append(island)
+                    total_hull_count += 1
+
+                bm.free()
+                bpy.data.objects.remove(obj_phys)
+                obj.select_set(True)
+                bpy.context.view_layer.objects.active = obj
+
+                # VMF Setup
+                vmf = new_vmf()
+                solids_to_add = []
+                print(f"\n\n[VMF Export] Total island count: {len(islands)}")
+
+                for island in islands:
+
+                    sides_to_add = []
+
+                    print(f"[VMF Export] Total triangle count in island: {len(island)}")
+
+                    for triangle in island:
+                        new_side = Side()
+
+                        # A Hammer brush's "side" is basically the equivalent of a Blender triangle
+                        new_side.plane[0].x, new_side.plane[0].z, new_side.plane[0].y = int(round(triangle[0][0],0)), int(round(triangle[0][1],0)) * -1, int(round(triangle[0][2],0))
+                        new_side.plane[1].x, new_side.plane[1].z, new_side.plane[1].y = int(round(triangle[1][0],0)), int(round(triangle[1][1],0)) * -1, int(round(triangle[1][2],0))
+                        new_side.plane[2].x, new_side.plane[2].z, new_side.plane[2].y = int(round(triangle[2][0],0)), int(round(triangle[2][1],0)) * -1, int(round(triangle[2][2],0))
+                        new_side.plane[0], new_side.plane[2] = new_side.plane[2], new_side.plane[0]
+                        sides_to_add.append(new_side)
+
+                    print(f"[VMF Export] Total side count: {len(sides_to_add)}")
+                    print(f"[VMF Export] VMF Texture to set: {vmf_texture}")
+
+                    new_solid = Solid()
+
+                    print(f"[VMF Export] Texture now set: {new_solid.has_texture('tools/toolsnodraw')}")
+
+                    for side in sides_to_add:
+                        new_solid.add_sides(side)
+
+                    new_solid.set_texture(vmf_texture)
+                    solids_to_add.append(new_solid)
+
+                    print(f"[VMF Export] Added {len(sides_to_add)} sides to solid")
+                
+                for solid in solids_to_add:
+                    vmf.add_solids(solid)
+                print(f"[VMF Export] Added {len(solids_to_add)} solids to VMF")
+
+                total_solids_count += len(solids_to_add)
+
+                import time
+                export_path = os.path.join(bpy.path.abspath(vmf_export_dir), time.strftime("%Y%m%d-%H%M%S")) + "" + f" {str(obj_index)}.vmf"
+                print("Export path: " + export_path)
+
+                obj_index += 1
+                
+                try:
+                    vmf.export(export_path)
+                except Exception as e:
+                    display_msg_box(
+                        f"Couldn't write VMF due to following:\n{e}", "Info", "INFO")
+                    print(f"ERROR: Couldn't write VMF due to following:\n{e}")
+
+                    return {'FINISHED'}
+
+            print(f"[VMF Export] {total_solids_count} solids exported successfully to VMF folder:\n{vmf_export_dir}\n\n")
+            display_msg_box(
+                f"{total_solids_count} solids exported successfully to VMF folder:\n{vmf_export_dir}", "Info", "INFO")
 
         return {'FINISHED'}
 
@@ -1886,7 +2012,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.enabled = check_for_selected(verbose=False)
+        layout.enabled = True
 
         rowGen = layout.row()
         row1 = layout.row()
