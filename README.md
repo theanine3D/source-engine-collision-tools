@@ -6,21 +6,21 @@ Finding this addon useful? Please consider starring it ⭐, or donating 🙂<br>
 
 ## Features
 Some features are customizeable and can be tweaked via optional settings. There is also a "Recommended Settings" button that will automatically guess the best settings for you based on the currently selected, active object.
-- **Generate Collision Mesh** - Generate a Source Engine-compliant collision model based on the current active object.
+- **Generate Collision Mesh** - Generate a Source Engine-compliant collision model for every currently selected object.
   - Supports (optional) decimation, to automatically reduce the complexity of the resulting collision model
 - **Generate Fractured Collision** - This operator uses the Cell Fracture addon built into Blender to generate more accurate and performant collision meshes for Source Engine. However, unlike the above operator, it is intended to be used on individual props, not entire scenes at once. Works best on fully sealed objects with no holes or non-manifold geometry.
   - Automatically creates a gap between collision hulls to prevent overlapping. The size of the gap is determined by the "Gap Width" setting
   - Attempts to generate only the amount of hulls specified by the "Fracture Target" setting. ie. A "Fracture Target" of 4 will try to split up the model into only 4 parts.
   - Note that the Cell Fracture addon needs to be enabled in your Blender preferences first!
 
-- **Split Up Collision Mesh** - Splits up a selected collision model into multiple separate objects, with every part having no more than 32 hulls.
+- **Split Up Collision Mesh** - Splits up selected collision models into multiple separate objects, with every part having no more than 32 hulls.
 - **Merge Adjacent Similars** - Merges convex hulls with similar adjacent hulls aggressively, lowering the final amount of hulls & producing a (potentially) less accurate, but more performant model. Similarity is based on the face count and volume of the hulls.
 - **Remove Thin Hulls** - Removes any convex hulls that are significantly smaller than all other hulls.
-- **Force Convex** - Forces all existing hulls in a collision model to be convex. Especially useful after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
+- **Force Convex** - Forces all existing hulls in every selected collision model to be convex. Especially useful after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
 - **Remove Inside Hulls** - Removes any hulls that are completely or almost completely buried inside other hulls.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
 - **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map.
-- **Export Hulls to Hammer .VMF** - Converts hulls in the selected collision mesh into Source Engine brush solids and exports them as a .VMF file that can be opened in Hammer.
+- **Export Hulls to Hammer .VMF** - Converts hulls in the selected collision mesh(es) into Source Engine brush solids and exports them as a .VMF file that can be opened in Hammer.
 
 ## Installation
 - For the newest, bleeding edge version, press the big green "Code" button above, and choose "Download ZIP"
