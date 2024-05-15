@@ -291,6 +291,7 @@ def generate_QC_lines(obj, models_dir, mats_dir):
     QC_template.append(f'$collisionmodel "{obj.name}.smd"\n')
     QC_template.append('{\n')
     QC_template.append('\t$concave\n')
+    QC_template.append('\t$automass\n')
     QC_template.append('}\n')
     return QC_template
 
@@ -1513,59 +1514,62 @@ class GenerateSourceQC(bpy.types.Operator):
 
     def execute(self, context):
 
-        if check_for_selected():
-            QC_folder = bpy.path.abspath(
-                bpy.context.scene.SrcEngCollProperties.QC_Folder)
-            models_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir
-            mats_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir
-            dirs = [bpy.context.scene.SrcEngCollProperties.QC_Folder,
-                    models_dir, mats_dir]
+        QC_folder = bpy.path.abspath(
+            bpy.context.scene.SrcEngCollProperties.QC_Folder)
+        models_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir
+        mats_dir = bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir
+        dirs = [bpy.context.scene.SrcEngCollProperties.QC_Folder,
+                models_dir, mats_dir]
 
-            # Check for trailing slashes
-            for dir in dirs:
-                if not dir.endswith("\\") and not dir.endswith("/"):
-                    display_msg_box(
-                        "One of your specified QC directories is missing a trailing slash (\\ or /) at the end.\nAdd one first and then try again", "Error", "ERROR")
-                    return {'FINISHED'}
-
-           # Get the Collision Models collection
-            root_collection = None
-            if 'Collision Models' in bpy.data.collections.keys():
-                if len(bpy.data.collections["Collision Models"].all_objects) > 0:
-                    root_collection = bpy.data.collections['Collision Models']
-                else:
-                    display_msg_box(
-                        "There are no collision models in the 'Collision Models' collection. Place your collision models there first", "Error", "ERROR")
-            else:
+        # Check for trailing slashes
+        for dir in dirs:
+            if not dir.endswith("\\") and not dir.endswith("/"):
                 display_msg_box(
-                    "There is no 'Collision Models' collection. Please create one with that exact name, and then place your collision models inside it", "Error", "ERROR")
-            if root_collection == None:
+                    "One of your specified QC directories is missing a trailing slash (\\ or /) at the end.\nAdd one first and then try again", "Error", "ERROR")
                 return {'FINISHED'}
 
-            # Get list of all objects in the Collision Models collection
-            objs = [obj for obj in root_collection.all_objects]
+        # Get the Collision Models collection
+        root_collection = None
+        if 'Collision Models' in bpy.data.collections.keys():
+            if len(bpy.data.collections["Collision Models"].all_objects) > 0:
+                root_collection = bpy.data.collections['Collision Models']
+            else:
+                display_msg_box(
+                    "There are no collision models in the 'Collision Models' collection. Place your collision models there first", "Error", "ERROR")
+        else:
+            display_msg_box(
+                "There is no 'Collision Models' collection. Please create one with that exact name, and then place your collision models inside it", "Error", "ERROR")
+        if root_collection == None:
+            return {'FINISHED'}
 
-            # Generate QC file for every object
-            for obj in objs:
-                with open(f"{QC_folder}{obj.name}.qc", 'w') as qc_file:
-                    qc_file.writelines(generate_QC_lines(
-                        obj, models_dir, mats_dir))
+        # Get list of all objects in the Collision Models collection, but exclude any that are hidden
+        objs = [obj for obj in root_collection.all_objects if not obj.hide_get()]
+        if len(objs) == 0:
+            display_msg_box(
+            "There are no visible collision models in the Collision Models collection. Check to make sure that they're not all hidden.", "Error", "ERROR")
+            return {'FINISHED'}
 
-            # Generate empty placeholder SMD
-            with open(QC_folder + "Empty.smd", 'w') as empty_smd_file:
-                empty_smd_file.writelines(generate_SMD_lines())
+        # Generate QC file for every object
+        for obj in objs:
+            with open(f"{QC_folder}{obj.name}.qc", 'w') as qc_file:
+                qc_file.writelines(generate_QC_lines(
+                    obj, models_dir, mats_dir))
 
-            # Generate the transparent physics VTF/VMT
-            shutil.copy(addon_path + "/phys.vtf", QC_folder + "/phys.vtf")
-            shutil.copy(addon_path + "/phys.vmt", QC_folder + "/phys.vmt")
-            with open(QC_folder + "/phys.vmt", 'r') as phys_vmt:
-                content = phys_vmt.read()
-            content = content.replace("models/", mats_dir)
-            with open(QC_folder + "/phys.vmt", 'w') as phys_vmt:
-                phys_vmt.write(content)
+        # Generate empty placeholder SMD
+        with open(QC_folder + "Empty.smd", 'w') as empty_smd_file:
+            empty_smd_file.writelines(generate_SMD_lines())
 
-            display_msg_box("QC files generated successfully in " + QC_folder +
-                            "\n\nYou will still need to export your collision models as SMD through other means (ie. Blender Source Tools or SourceOps)", "Info", "INFO")
+        # Generate the transparent physics VTF/VMT
+        shutil.copy(addon_path + "/phys.vtf", QC_folder + "/phys.vtf")
+        shutil.copy(addon_path + "/phys.vmt", QC_folder + "/phys.vmt")
+        with open(QC_folder + "/phys.vmt", 'r') as phys_vmt:
+            content = phys_vmt.read()
+        content = content.replace("models/", mats_dir)
+        with open(QC_folder + "/phys.vmt", 'w') as phys_vmt:
+            phys_vmt.write(content)
+
+        display_msg_box("QC files generated successfully in " + QC_folder +
+                        "\n\nYou will still need to export your collision models as SMD through other means (ie. Blender Source Tools or SourceOps)", "Info", "INFO")
 
         return {'FINISHED'}
 
