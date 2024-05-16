@@ -39,7 +39,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 
 ## Previews ##
 ### Interface ###
-![image](https://github.com/theanine3D/source-engine-collision-tools/assets/88953117/378e3f9e-8f9a-400e-9dd2-b8b7b33ae1d8)
+![image](https://github.com/theanine3D/source-engine-collision-tools/assets/88953117/d7165209-cfea-434a-8dfd-285a49342f15)
 ### Generate Fractured Collision ###
 ![Untitled](https://user-images.githubusercontent.com/88953117/231557347-ce472d26-0634-4db9-a18f-0d1e7891a019.gif)
 ### Generate Collision Mesh
