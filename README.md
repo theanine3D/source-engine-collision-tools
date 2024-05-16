@@ -19,7 +19,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 - **Force Convex** - Forces all existing hulls in every selected collision model to be convex. Especially useful after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
 - **Remove Inside Hulls** - Removes any hulls that are completely or almost completely buried inside other hulls.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
-  - Supports adding custom QC commands via a QC Override system. This allows you to, for example, add a custom "$scale" or "$surfaceprop" command to all generated QC files. How it works: simply add a string-based Custom Property to one split-up collision object in your Blender scene, with the property name starting with "$". Enter the value/parameters for this property. Then press the Copy QC Overrides button to copy this override to all other selected collision parts. These will be included in the resulting generated QC files. 
+  - Supports adding custom QC commands via a QC Override system. This allows you to, for example, add a custom "$scale" or "$surfaceprop" command to all generated QC files.
 - **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map.
 - **Export Hulls to Hammer .VMF** - Converts hulls in the selected collision mesh(es) into Source Engine brush solids and exports them as a .VMF file that can be opened in Hammer.
 
@@ -35,6 +35,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 - Merge Adjacent Similars is less effective on overly large, complex models. For best results, split up a large complex model into several (3-5) separate pieces first, and then use Merge Adjacent Similars on each individual piece.
 - For the "Update VMF" feature, the very first part of your split-up collision mesh, ending in 'part_000.mdl', must already be in the VMF somewhere (such as in a prop_static). The operator scans the VMF for any part_000, and any that are found are used as a template for all the other parts. So you'll need to add that first part manually in Hammer first.
 - Source Engine has a limit of 32 hulls per collision mesh. Going beyond 32 hulls can lead to severe lag during gameplay. The "Split Up Collision Mesh" and "Update VMF" features are handy for this. By splitting up your collision mesh into 32-hull parts, you prevent lag, and the Update VMF feature can add numerous (even dozens or hundreds) of parts automatically for you to a VMF file.
+- To utilize the QC override system, add a string-based Custom Property to one split-up collision object in your Blender scene, with the property name starting with "$". Enter the value/parameters for this property. Then press the Copy QC Overrides button to copy this override to all other selected collision parts. These will be included in the resulting generated QC files. 
 
 ## Previews ##
 ### Interface ###
