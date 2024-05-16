@@ -19,6 +19,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 - **Force Convex** - Forces all existing hulls in every selected collision model to be convex. Especially useful after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
 - **Remove Inside Hulls** - Removes any hulls that are completely or almost completely buried inside other hulls.
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
+  - Supports adding custom QC commands via a QC Override system. Simply add a string-based Custom Property to one split-up collision object in your Blender scene, with the property name starting with "$". Add the custom value/parameters for this property. Then press the Copy QC Overrides button to copy this override to all other selected collision parts. These will be included when you press the Generate QC button. 
 - **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map.
 - **Export Hulls to Hammer .VMF** - Converts hulls in the selected collision mesh(es) into Source Engine brush solids and exports them as a .VMF file that can be opened in Hammer.
 
