@@ -94,7 +94,7 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         name="QC Folder",
         subtype="DIR_PATH",
         description="Full path of the folder in which to save the generated QCs",
-        default="//export//phys//",
+        default="/export/phys/",
         maxlen=1024)
     QC_Src_Models_Dir: bpy.props.StringProperty(
         name="Models Path",
@@ -288,6 +288,7 @@ def generate_SMD_lines():
 def generate_QC_lines(obj, models_dir, mats_dir, surfaceprop):
     QC_template = list()
     QC_template.append(f'$modelname "{models_dir}{obj.name}.mdl"\n')
+    QC_template.append(f'$scale 1\n')
     QC_template.append(f'$body {obj.name} "Empty.smd"\n')
     QC_template.append(f'$surfaceprop "{surfaceprop.lower()}"\n')
     QC_template.append('$staticprop\n')
@@ -298,6 +299,38 @@ def generate_QC_lines(obj, models_dir, mats_dir, surfaceprop):
     QC_template.append('\t$concave\n')
     QC_template.append('\t$automass\n')
     QC_template.append('}\n')
+
+    # Overrides
+    qc_overrides_keys, qc_overrides_values = list(), list()
+
+    qc_overrides_keys = [prop for prop in obj.keys() if not prop.startswith("_RNA_UI") and prop[0] == "$"]
+    qc_overrides_values = [obj[prop] for prop in obj.keys() if not prop.startswith("_RNA_UI") and prop[0] == "$"]
+
+    qc_overrides = {qc_overrides_keys[i]: qc_overrides_values[i] for i in range(len(qc_overrides_keys))}
+
+    # Check if any of the override commands already exist, and if so, replace the existing one with the override
+    existing_overrides = []
+    for override in qc_overrides.keys():
+        for line in QC_template:
+            if override in line:
+                QC_template[QC_template.index(line)] = f'{override} {str(qc_overrides[override])}\n'
+                # line = f"test lol {str(2+4)}"
+                existing_overrides.append(override)
+
+    # Clean up the override list by removing the ones that already existed in the template
+    for override in existing_overrides:
+        del qc_overrides[override]
+
+    if len(qc_overrides.keys()) > 0:
+        QC_template.append('\n')
+        QC_template.append('# Overrides')
+        QC_template.append('\n')
+
+        # Add any remaining commands
+        for override in qc_overrides.keys():
+            QC_template.append('\n')
+            QC_template.append(f'{override} {str(qc_overrides[override])}\n')
+
     return QC_template
 
 def bmesh_walk_hull(vert):
@@ -1577,6 +1610,73 @@ class GenerateSourceQC(bpy.types.Operator):
                         "\n\nYou will still need to export your collision models as SMD through other means (ie. Blender Source Tools or SourceOps)", "Info", "INFO")
 
         return {'FINISHED'}
+    
+# Copy QC Overrides to Selected
+
+class CopyQCOverrides(bpy.types.Operator):
+    """Copy the QC overrides from the current active object (added as string-type Custom Properties) to all other selected objects"""
+    bl_idname = "object.copy_qc_overrides"
+    bl_label = "Copy QC Overrides"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
+
+            return {'FINISHED'}
+        
+        active_obj = bpy.context.active_object
+        qc_overrides_keys, qc_overrides_values = list(), list()
+
+        if len(objs) >= 2:
+            qc_overrides_keys = [prop for prop in active_obj.keys() if not prop.startswith("_RNA_UI") and prop[0] == "$"]
+            qc_overrides_values = [active_obj[prop] for prop in active_obj.keys() if not prop.startswith("_RNA_UI") and prop[0] == "$"]
+
+        qc_overrides = {qc_overrides_keys[i]: qc_overrides_values[i] for i in range(len(qc_overrides_keys))}
+
+        for obj in objs:
+            for override in qc_overrides.keys():
+                bpy.data.objects[obj.name][override] = qc_overrides[override]
+
+        display_msg_box(f"{str(len(qc_overrides.keys()))} override(s) copied to {len(objs)-1} objects.", "Info", "INFO")
+
+        return {'FINISHED'}
+    
+# Clear QC Overrides from Selected
+
+class ClearQCOverrides(bpy.types.Operator):
+    """Clear the QC overrides from all selected objects"""
+    bl_idname = "object.clear_qc_overrides"
+    bl_label = "Clear QC Overrides"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
+
+            return {'FINISHED'}
+
+        num_deleted = 0
+        for obj in objs:
+
+            qc_overrides_keys = [prop for prop in obj.keys() if not prop.startswith("_RNA_UI") and prop[0] == "$"]
+
+            for obj in objs:
+                for override in qc_overrides_keys:
+                    del obj[override]
+                    num_deleted += 1
+
+        display_msg_box(f"{str(num_deleted)} override(s) deleted from {len(objs)} object(s).", "Info", "INFO")
+
+        return {'FINISHED'}
 
 # Recommended Settings button
 
@@ -1987,6 +2087,8 @@ ops = (
     FractGenSrcCollision,
     SplitUpSrcCollision,
     GenerateSourceQC,
+    CopyQCOverrides,
+    ClearQCOverrides,
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinHulls,
     Cleanup_ForceConvex,
@@ -2101,6 +2203,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowQC5 = boxQC.row()
         rowQC6 = boxQC.row()
         rowQC7 = boxQC.row()
+        rowQC8 = boxQC.row()
+        rowQC9 = boxQC.row()
 
         rowQC1.prop(bpy.context.scene.SrcEngCollProperties, "QC_Folder")
         rowQC2.prop(bpy.context.scene.SrcEngCollProperties,
@@ -2110,10 +2214,12 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
             bpy.context.scene.SrcEngCollProperties.QC_Src_Models_Dir) > 0 and len(bpy.context.scene.SrcEngCollProperties.QC_Src_Mats_Dir) > 0
         rowQC4.prop(bpy.context.scene.SrcEngCollProperties, "QC_SurfaceProp")
         rowQC5.operator("object.src_eng_qc")
-        rowQC6.prop(bpy.context.scene.SrcEngCollProperties, "VMF_File")
-        rowQC7.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Remove")
-        rowQC7.operator("object.src_eng_vmf_update")
-        rowQC7.enabled = len(
+        rowQC6.operator("object.copy_qc_overrides")
+        rowQC7.operator("object.clear_qc_overrides")
+        rowQC8.prop(bpy.context.scene.SrcEngCollProperties, "VMF_File")
+        rowQC9.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Remove")
+        rowQC9.operator("object.src_eng_vmf_update")
+        rowQC9.enabled = len(
             bpy.context.scene.SrcEngCollProperties.VMF_File) > 0
         
         # Export as Brushes
@@ -2137,6 +2243,8 @@ classes = (
     FractGenSrcCollision,
     SplitUpSrcCollision,
     GenerateSourceQC,
+    CopyQCOverrides,
+    ClearQCOverrides,
     Cleanup_MergeAdjacentSimilars,
     Cleanup_RemoveThinHulls,
     Cleanup_ForceConvex,
