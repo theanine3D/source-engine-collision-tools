@@ -590,9 +590,11 @@ class GenerateSrcCollision(bpy.types.Operator):
                 bpy.context.active_object.data.materials[0].diffuse_color = (
                     1, 0, 0.78315, 1)
 
-                # Finalize transforms
+                # Finalize transforms and restore the original object's origin point
                 bpy.ops.object.transform_apply(
                     location=False, rotation=True, scale=True)
+                bpy.context.scene.cursor.location = tuple(obj.location)
+                bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
                 
                 # Optional post-merge
                 if bpy.context.scene.SrcEngCollProperties.Post_Merge:
