@@ -1,10 +1,9 @@
 import bpy
 import bmesh
 import mathutils
-from bpy.utils import(register_class, unregister_class)
-from bpy.types import(Panel, PropertyGroup)
-from bpy.props import(StringProperty,
-                      FloatProperty, BoolProperty)
+from bpy.utils import register_class, unregister_class
+from bpy.types import Panel, PropertyGroup
+from bpy.props import IntProperty, StringProperty, FloatProperty, BoolProperty
 import re
 import os
 import sys
@@ -407,7 +406,104 @@ def get_3d_viewport():
                 return area
     return None
 
+def force_convex(objs):
+    if len(objs) >= 1:
+        for obj in objs:
+            obj.select_set(False)
 
+        total_hull_count = 0
+
+        for obj in objs:
+            bpy.ops.object.select_all(action='DESELECT')
+
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+
+            original_name = obj.name
+
+            # Make sure no faces are selected
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.reveal()
+            bpy.ops.mesh.select_mode(type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.transform_apply(
+                location=False, rotation=True, scale=True)
+
+            # Select all hulls and separate them into separate objects
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.dissolve_limited(
+                angle_limit=0.0872665, delimit={'NORMAL'})
+            bpy.ops.mesh.quads_convert_to_tris(
+                quad_method='BEAUTY', ngon_method='BEAUTY')
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Begin Bmesh processing
+            me = obj.data
+            bm = bmesh.new()
+            bm_processed = bmesh.new()
+
+            bm.from_mesh(me)
+            hulls = [hull for hull in bmesh_get_hulls(
+                bm, verts=bm.verts)]
+            print("Hulls to process:", len(hulls))
+
+            # Create individual hull bmeshes
+            for hull in hulls:
+                bm_hull = bmesh.new()
+
+                # Add vertices to individual bmesh hull
+                for vert in hull:
+                    bmesh.ops.create_vert(bm_hull, co=vert.co)
+
+                # Generate convex hull
+                ch = bmesh.ops.convex_hull(
+                    bm_hull, input=bm_hull.verts, use_existing_faces=False)
+                bmesh.ops.delete(
+                    bm_hull,
+                    geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
+                    context='VERTS')
+
+                # Add the processed hull to the new main object, which will store all of them
+                bmesh_join(bm_processed, bm_hull)
+                total_hull_count += 1
+                bm_hull.clear()
+                bm_hull.free()
+
+            bm_processed.to_mesh(me)
+            me.update()
+            bm.clear()
+            bm.free()
+            bm_processed.clear()
+            bm_processed.free()
+
+            # End Bmesh processing
+
+            # Rejoin and clean up
+            obj.name = original_name
+            bpy.ops.object.transform_apply(
+                location=False, rotation=True, scale=True)
+            bpy.ops.object.shade_smooth()
+
+            # Remove non-manifolds
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_mode(
+                use_extend=False, use_expand=False, type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_non_manifold()
+            bpy.ops.mesh.select_linked(delimit=set())
+            bpy.ops.mesh.delete(type='VERT')
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            
+    return total_hull_count
+    
 
 # Generate Collision Mesh operator
 
@@ -603,13 +699,16 @@ class GenerateSrcCollision(bpy.types.Operator):
                     bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
                     bpy.ops.mesh.remove_doubles(threshold=merge_distance)
                     bpy.ops.object.mode_set(mode='OBJECT')
-                    bpy.ops.object.src_eng_cleanup_force_convex()
+                    force_convex([bpy.context.active_object])
                     bm = bmesh.new()
                     bm.from_mesh(bpy.context.active_object.data)
                     total_hull_count = len([hull for hull in bmesh_get_hulls(bm, verts=bm.verts)])
                     bm.clear()
                     bm.free()
-                
+                    
+            obj_phys.select_set(True)
+            bpy.context.view_layer.objects.active = obj_phys
+
             display_msg_box(
                 "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
             print("Generated collision mesh(es) with total hull count of " +
@@ -1333,103 +1432,11 @@ class Cleanup_ForceConvex(bpy.types.Operator):
             print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
+        
+        total_hull_count = force_convex(objs)
 
-        if len(objs) >= 1:
-            for obj in objs:
-                obj.select_set(False)
-
-            total_hull_count = 0
-
-            for obj in objs:
-                bpy.ops.object.select_all(action='DESELECT')
-
-                bpy.context.view_layer.objects.active = obj
-                obj.select_set(True)
-
-                original_name = obj.name
-
-                # Make sure no faces are selected
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.reveal()
-                bpy.ops.mesh.select_mode(type='VERT')
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.object.mode_set(mode='OBJECT')
-                bpy.ops.object.transform_apply(
-                    location=False, rotation=True, scale=True)
-
-                # Select all hulls and separate them into separate objects
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_all(action='SELECT')
-                bpy.ops.mesh.dissolve_limited(
-                    angle_limit=0.0872665, delimit={'NORMAL'})
-                bpy.ops.mesh.quads_convert_to_tris(
-                    quad_method='BEAUTY', ngon_method='BEAUTY')
-                bpy.ops.mesh.normals_make_consistent(inside=False)
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.object.mode_set(mode='OBJECT')
-
-                # Begin Bmesh processing
-                me = obj.data
-                bm = bmesh.new()
-                bm_processed = bmesh.new()
-
-                bm.from_mesh(me)
-                hulls = [hull for hull in bmesh_get_hulls(
-                    bm, verts=bm.verts)]
-                print("Hulls to process:", len(hulls))
-
-                # Create individual hull bmeshes
-                for hull in hulls:
-                    bm_hull = bmesh.new()
-
-                    # Add vertices to individual bmesh hull
-                    for vert in hull:
-                        bmesh.ops.create_vert(bm_hull, co=vert.co)
-
-                    # Generate convex hull
-                    ch = bmesh.ops.convex_hull(
-                        bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                    bmesh.ops.delete(
-                        bm_hull,
-                        geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                        context='VERTS')
-
-                    # Add the processed hull to the new main object, which will store all of them
-                    bmesh_join(bm_processed, bm_hull)
-                    total_hull_count += 1
-                    bm_hull.clear()
-                    bm_hull.free()
-
-                bm_processed.to_mesh(me)
-                me.update()
-                bm.clear()
-                bm.free()
-                bm_processed.clear()
-                bm_processed.free()
-
-                # End Bmesh processing
-
-                # Rejoin and clean up
-                obj.name = original_name
-                bpy.ops.object.transform_apply(
-                    location=False, rotation=True, scale=True)
-                bpy.ops.object.shade_smooth()
-
-                # Remove non-manifolds
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_mode(
-                    use_extend=False, use_expand=False, type='VERT')
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.mesh.select_non_manifold()
-                bpy.ops.mesh.select_linked(delimit=set())
-                bpy.ops.mesh.delete(type='VERT')
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.mesh.select_all(action='SELECT')
-                bpy.ops.mesh.normals_make_consistent(inside=False)
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.object.mode_set(mode='OBJECT')
-            display_msg_box(
-                "Processed " + str(total_hull_count) + " hulls.", "Info", "INFO")
+        display_msg_box(
+            "Processed " + str(total_hull_count) + " hulls.", "Info", "INFO")
 
         return {'FINISHED'}
 
@@ -1456,14 +1463,18 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
                 obj.select_set(False)
 
             amount_to_remove = 0
+            origin_point = None
 
             for obj in objs:
+
                 bpy.ops.object.select_all(action='DESELECT')
 
                 bpy.context.view_layer.objects.active = obj
                 obj.select_set(True)
 
                 original_name = obj.name
+                original_origin = obj.location.copy()
+
                 # Make sure no faces are selected
                 bpy.ops.object.mode_set(mode='OBJECT')
                 bpy.ops.object.mode_set(mode='EDIT')
@@ -1536,6 +1547,13 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
                 bpy.ops.object.transform_apply(
                     location=False, rotation=True, scale=True)
                 bpy.ops.object.shade_smooth()
+
+                # Restore the original object's origin point
+                original_cursor_location = bpy.context.scene.cursor.location.copy()
+                bpy.context.scene.cursor.location = original_origin.copy()
+                bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+                bpy.context.scene.cursor.location = original_cursor_location
+
 
             display_msg_box(
                 "Removed " + str(amount_to_remove) + " hull(s).", "Info", "INFO")
@@ -1937,7 +1955,7 @@ class ExportVMF(bpy.types.Operator):
                 # Update the mesh
                 mesh.update()
 
-                bpy.ops.object.src_eng_cleanup_force_convex()
+                force_convex([obj])
 
                 # Begin Bmesh processing
                 bm = bmesh.new()
@@ -2079,6 +2097,50 @@ class CleanupCollection(bpy.types.Operator):
 
         return {'FINISHED'}
 
+class ConvexCut(bpy.types.Operator):
+    """Combines the bisect and convex hull functions together, enabling the user to cut up the model and instantly convert a cut piece into a convex hull after every cut"""
+    bl_idname = "object.convex_cut"
+    bl_label = "Convex Cut"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    initial_vertex_count: IntProperty()
+
+    def invoke(self, context, event):
+        if context.active_object:
+            context.window_manager.modal_handler_add(self)
+            self.initial_vertex_count = len(context.object.data.vertices)
+            bpy.ops.mesh.bisect('INVOKE_DEFAULT')
+            return {'RUNNING_MODAL'}
+        else:
+            self.report({'WARNING'}, "No active object, could not finish")
+            return {'CANCELLED'}
+    
+    def modal(self, context, event):
+        if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
+            bpy.ops.object.mode_set(mode='OBJECT')
+            if len(context.active_object.data.vertices) != self.initial_vertex_count:
+                bpy.ops.object.mode_set(mode='EDIT')
+                print("\nNow in edit mode...\n")
+                bpy.ops.mesh.select_mode(type='VERT')
+                print(f"Selected vertex count: {len([v for v in bpy.context.active_object.data.vertices if v.select])}")
+                bpy.ops.ed.undo_push(message="Bisect Operation")
+                bpy.ops.mesh.rip('INVOKE_DEFAULT', use_fill=False, use_accurate=True)
+                bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.split()
+                bpy.ops.mesh.convex_hull('INVOKE_DEFAULT')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.shade_smooth()
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_non_manifold()  
+                bpy.ops.mesh.select_linked(delimit=set())
+                return {'FINISHED'}
+        if event.type == 'RIGHTMOUSE':
+            return {'FINISHED'}
+
+        return {'RUNNING_MODAL'}
+
+
 
 # End classes
 
@@ -2097,13 +2159,17 @@ ops = (
     RecommendedCollSettings,
     CleanupCollection,
     UpdateVMF,
-    ExportVMF
+    ExportVMF,
+    ConvexCut
 )
 
 
 def menu_func(self, context):
     for op in ops:
         self.layout.operator(op.bl_idname)
+
+def menu_func_mesh(self, context):
+        self.layout.operator(ConvexCut.bl_idname)
 
 # MATERIALS PANEL
 
@@ -2253,13 +2319,15 @@ classes = (
     CleanupCollection,
     RecommendedCollSettings,
     UpdateVMF,
-    ExportVMF
+    ExportVMF,
+    ConvexCut
 )
 
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    bpy.types.VIEW3D_MT_edit_mesh.append(menu_func_mesh)
 
     bpy.types.Scene.SrcEngCollProperties = bpy.props.PointerProperty(
         type=SrcEngCollProperties)
@@ -2268,6 +2336,7 @@ def register():
 def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
+    bpy.types.VIEW3D_MT_edit_mesh.remove(menu_func_mesh)
 
     del bpy.types.Scene.SrcEngCollProperties
 
