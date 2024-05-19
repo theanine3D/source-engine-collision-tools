@@ -17,7 +17,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -1722,161 +1722,160 @@ class UpdateVMF(bpy.types.Operator):
 
     def execute(self, context):
 
-        if check_for_selected():
-            VMF_path = bpy.path.abspath(
-                bpy.context.scene.SrcEngCollProperties.VMF_File)
-            remove_on = bpy.context.scene.SrcEngCollProperties.VMF_Remove
+        VMF_path = bpy.path.abspath(
+            bpy.context.scene.SrcEngCollProperties.VMF_File)
+        remove_on = bpy.context.scene.SrcEngCollProperties.VMF_Remove
 
-           # Get the Collision Models collection
-            root_collection = None
-            if 'Collision Models' in bpy.data.collections.keys():
-                if len(bpy.data.collections["Collision Models"].all_objects) > 0:
-                    root_collection = bpy.data.collections['Collision Models']
-                else:
-                    display_msg_box(
-                        "There are no collision models in the 'Collision Models' collection. Place your collision models there first", "Error", "ERROR")
+        # Get the Collision Models collection
+        root_collection = None
+        if 'Collision Models' in bpy.data.collections.keys():
+            if len(bpy.data.collections["Collision Models"].all_objects) > 0:
+                root_collection = bpy.data.collections['Collision Models']
             else:
                 display_msg_box(
-                    "There is no 'Collision Models' collection. Please create one with that exact name, and then place your collision models inside it", "Error", "ERROR")
-            if root_collection == None:
+                    "There are no collision models in the 'Collision Models' collection. Place your collision models there first", "Error", "ERROR")
+        else:
+            display_msg_box(
+                "There is no 'Collision Models' collection. Please create one with that exact name, and then place your collision models inside it", "Error", "ERROR")
+        if root_collection == None:
+            return {'FINISHED'}
+
+        # Get list of all objects in the Collision Models collection
+        objs = [
+            obj.name for obj in root_collection.all_objects if "_part_" in obj.name]
+        
+        # Rename all collision pieces to lowercase to match Hammer's forced lower-casing
+        for o in objs:
+            bpy.data.objects[o].name = o.lower()
+            o = o.lower()
+
+        print(f"List of collision objs: {objs}")
+        objs.sort()
+
+        print("Opening VMF file at: " + VMF_path)
+        # Open VMF file for reading and parse data
+        with open(VMF_path, 'r+') as vmf_file:
+
+            total_length = len(vmf_file.readlines())
+
+            print(str(total_length) + " lines loaded from VMF file.")
+            vmf_file.seek(0)
+
+            contents = vmf_file.read()
+
+            # Make sure it's a real VMF file first
+            if "versioninfo" not in contents[0:30]:
+                display_msg_box(
+                    "Please select a valid VMF file and try again", "Error", "ERROR")
                 return {'FINISHED'}
 
-            # Get list of all objects in the Collision Models collection
-            objs = [
-                obj.name for obj in root_collection.all_objects if "_part_" in obj.name]
-            
-            # Rename all collision pieces to lowercase to match Hammer's forced lower-casing
-            for o in objs:
-                bpy.data.objects[o].name = o.lower()
-                o = o.lower()
+            # Setup Regex
+            entities_regex = r'^[a-z_]+\n\{\n(?:.*?)^(?:\})\n'
+            part_zero_regex = r'(?!:/)[a-z_]*(?:_part_000)'
+            id_regex = r'\t\"id\" \"\d+\"'
 
-            print(f"List of collision objs: {objs}")
-            objs.sort()
+            # Parse VMF for entities
+            entities = re.findall(
+                entities_regex, contents, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            print(str(len(entities)) +
+                    " entities were found in the VMF.")
 
-            print("Opening VMF file at: " + VMF_path)
-            # Open VMF file for reading and parse data
-            with open(VMF_path, 'r+') as vmf_file:
-
-                total_length = len(vmf_file.readlines())
-
-                print(str(total_length) + " lines loaded from VMF file.")
-                vmf_file.seek(0)
-
-                contents = vmf_file.read()
-
-                # Make sure it's a real VMF file first
-                if "versioninfo" not in contents[0:30]:
-                    display_msg_box(
-                        "Please select a valid VMF file and try again", "Error", "ERROR")
-                    return {'FINISHED'}
-
-                # Setup Regex
-                entities_regex = r'^[a-z_]+\n\{\n(?:.*?)^(?:\})\n'
-                part_zero_regex = r'(?!:/)[a-z_]*(?:_part_000)'
-                id_regex = r'\t\"id\" \"\d+\"'
-
-                # Parse VMF for entities
-                entities = re.findall(
-                    entities_regex, contents, re.IGNORECASE | re.MULTILINE | re.DOTALL)
-                print(str(len(entities)) +
-                      " entities were found in the VMF.")
-
-                # If removal mode is enabled, remove entities containing _part_
-                if remove_on:
-                    new_entity_list = entities
-                    removed_count = 0
-                    for ent in entities:
-                        if "_part_" in ent:
-                            removed_count += 1
-                            print("REMOVING ENTITY:\n\n")
-                            print(ent)
-                            print("\n\n")
-                            new_entity_list.remove(ent)
-                    if removed_count > 0:
-                        vmf_file.close()
-                        with open(VMF_path, 'w') as vmf_file:
-                            vmf_file.writelines(new_entity_list)
-                            vmf_file.write("\n")
-                            display_msg_box(
-                                "VMF file modified successfully\n"+f"Removed {str(removed_count)} entities from the VMF.", "Info", "INFO")
-                    else:
-                        display_msg_box(
-                            "No partitioned collision models were found in the VMF file.", "Info", "INFO")
-                    vmf_file.close()
-                    return {'FINISHED'}
-
-                parts_zero_found = list()
-                i = 0
-
-                # Scan entity list for needed data
+            # If removal mode is enabled, remove entities containing _part_
+            if remove_on:
+                new_entity_list = entities
+                removed_count = 0
                 for ent in entities:
-
-                    # Look for any _part_0.mdl
-                    part_zero_found = re.search(part_zero_regex, ent, re.IGNORECASE |
-                                                re.MULTILINE | re.DOTALL)
-                    if part_zero_found:
-                        parts_zero_found.append(
-                            (i, part_zero_found.group()))
-                        print("Found part zero")
-
-                    i += 1
-
-
-                print(f"{len(parts_zero_found)} parts zero found")
-
-                new_entities_to_add = set()
-
-                # For every _part_000 that was found...
-                for part in parts_zero_found:
-                    
-                    print(f"Processing part: {part}")
-                    root = part[1][0:-3]
-                    print(f"Root: {root}")
-                    entity_index = part[0]
-
-                    matching_objs = set([o.lower() for o in objs if root.lower() in o.lower()])
-                    print(f"Length of matching_objs: {len(matching_objs)}")
-
-                    # For every matched Blender object
-                    for matched in matching_objs:
-
-                        # Check if the matched object exists in the VMF already
-                        if matched not in contents:
-
-                            old_entity = str(entities[entity_index])
-
-                            # Add new part number
-                            new_entity = old_entity.replace(
-                                "_part_000", "_part_" + matched[-3:])
-
-                            # Make sure collision is enabled in the new entity, just in case
-                            new_entity = new_entity.replace(
-                                '"solid" "0"', '"solid" "1"')
-
-                            # Remove old entity ID. Hammer will automatically assign a new one
-                            old_id = re.search(id_regex, new_entity, re.IGNORECASE |
-                                               re.MULTILINE | re.DOTALL)
-                            old_id = old_id.group()
-                            new_entity = new_entity.replace(old_id, "")
-
-                            new_entities_to_add.add(new_entity)
-                        else:
-                            continue
-
-                new_entities_to_add = list(new_entities_to_add)
-                new_entities_to_add.sort()
-                if len(new_entities_to_add) > 0:
-                    # Write new entities
-                    vmf_file.seek(0, 2)
-                    vmf_file.write("\n")
-                    vmf_file.writelines(new_entities_to_add)
-                    vmf_file.write("\n")
+                    if "_part_" in ent:
+                        removed_count += 1
+                        print("REMOVING ENTITY:\n\n")
+                        print(ent)
+                        print("\n\n")
+                        new_entity_list.remove(ent)
+                if removed_count > 0:
                     vmf_file.close()
-                    display_msg_box(
-                        "VMF file modified successfully\n"+f"Added {str(len(new_entities_to_add))} new entities to VMF.", "Info", "INFO")
+                    with open(VMF_path, 'w') as vmf_file:
+                        vmf_file.writelines(new_entity_list)
+                        vmf_file.write("\n")
+                        display_msg_box(
+                            "VMF file modified successfully\n"+f"Removed {str(removed_count)} entities from the VMF.", "Info", "INFO")
                 else:
                     display_msg_box(
-                        "VMF is already up-to-date", "Info", "INFO")
+                        "No partitioned collision models were found in the VMF file.", "Info", "INFO")
+                vmf_file.close()
+                return {'FINISHED'}
+
+            parts_zero_found = list()
+            i = 0
+
+            # Scan entity list for needed data
+            for ent in entities:
+
+                # Look for any _part_0.mdl
+                part_zero_found = re.search(part_zero_regex, ent, re.IGNORECASE |
+                                            re.MULTILINE | re.DOTALL)
+                if part_zero_found:
+                    parts_zero_found.append(
+                        (i, part_zero_found.group()))
+                    print("Found part zero")
+
+                i += 1
+
+
+            print(f"{len(parts_zero_found)} parts zero found")
+
+            new_entities_to_add = set()
+
+            # For every _part_000 that was found...
+            for part in parts_zero_found:
+                
+                print(f"Processing part: {part}")
+                root = part[1][0:-3]
+                print(f"Root: {root}")
+                entity_index = part[0]
+
+                matching_objs = set([o.lower() for o in objs if root.lower() in o.lower()])
+                print(f"Length of matching_objs: {len(matching_objs)}")
+
+                # For every matched Blender object
+                for matched in matching_objs:
+
+                    # Check if the matched object exists in the VMF already
+                    if matched not in contents:
+
+                        old_entity = str(entities[entity_index])
+
+                        # Add new part number
+                        new_entity = old_entity.replace(
+                            "_part_000", "_part_" + matched[-3:])
+
+                        # Make sure collision is enabled in the new entity, just in case
+                        new_entity = new_entity.replace(
+                            '"solid" "0"', '"solid" "1"')
+
+                        # Remove old entity ID. Hammer will automatically assign a new one
+                        old_id = re.search(id_regex, new_entity, re.IGNORECASE |
+                                            re.MULTILINE | re.DOTALL)
+                        old_id = old_id.group()
+                        new_entity = new_entity.replace(old_id, "")
+
+                        new_entities_to_add.add(new_entity)
+                    else:
+                        continue
+
+            new_entities_to_add = list(new_entities_to_add)
+            new_entities_to_add.sort()
+            if len(new_entities_to_add) > 0:
+                # Write new entities
+                vmf_file.seek(0, 2)
+                vmf_file.write("\n")
+                vmf_file.writelines(new_entities_to_add)
+                vmf_file.write("\n")
+                vmf_file.close()
+                display_msg_box(
+                    "VMF file modified successfully\n"+f"Added {str(len(new_entities_to_add))} new entities to VMF.", "Info", "INFO")
+            else:
+                display_msg_box(
+                    "VMF is already up-to-date", "Info", "INFO")
 
         return {'FINISHED'}
 
