@@ -18,6 +18,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
 - **Remove Thin Hulls** - Removes any convex hulls that are significantly smaller than all other hulls.
 - **Force Convex** - Forces all existing hulls in every selected collision model to be convex. Especially useful after using Blender's built-in Decimate modifier on an existing collision mesh, to ensure that any decimated hulls are still convex.
 - **Remove Inside Hulls** - Removes any hulls that are completely or almost completely buried inside other hulls.
+- **Convex Cut** - A combination of the Bisect and Convex Hull operators in Blender. This lets you cut up the model and at the same time convert the cut pieces into convex hulls. Can be found via the Mesh menu in Edit Mode. 
 - **Generate Source Engine QC** - Automatically generate QC files for one or more collision model(s), allowing you to quickly compile them with batch compile tools out there (ie. [Crowbar](https://developer.valvesoftware.com/wiki/Crowbar))
   - Supports adding custom QC commands via a QC Override system. This allows you to, for example, add a custom "$scale" or "$surfaceprop" command to all generated QC files.
 - **Update VMF** - Updates a selected VMF file by automatically adding any partitioned/split-up collision models that haven't already been added to the map.
