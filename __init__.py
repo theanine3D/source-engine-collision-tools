@@ -950,6 +950,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
                 bpy.context.view_layer.objects.active = obj
                 obj.select_set(True)
+                original_origin = obj.location.copy()
 
                 bpy.ops.object.transform_apply(
                     location=True, rotation=True, scale=True)
@@ -1019,7 +1020,14 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
                     new_group_collection.objects.link(new_group_obj)
                     bpy.ops.object.transform_apply(
-                        location=True, rotation=True, scale=True)
+                        location=False, rotation=True, scale=True)
+                    
+                    # Restore the original object's origin point
+                    original_cursor_location = bpy.context.scene.cursor.location.copy()
+                    bpy.context.scene.cursor.location = original_origin
+                    bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+                    bpy.context.scene.cursor.location = original_cursor_location
+
                     new_group_obj.select_set(False)
 
                     hull_groups.pop()
