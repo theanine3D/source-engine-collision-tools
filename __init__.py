@@ -16,7 +16,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 3, 1),
+    "version": (1, 4, 0),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -509,7 +509,7 @@ def force_convex(objs):
 
 
 class GenerateSrcCollision(bpy.types.Operator):
-    """Generate a Source Engine-compliant collision model based on the current active object. The original object will be temporarily hidden, but not modified otherwise"""
+    """Generate a Source Engine-compliant collision model for all selected mesh objects. The original object(s) will be temporarily hidden, but not modified otherwise"""
     bl_idname = "object.src_eng_collision"
     bl_label = "Generate Collision Mesh"
     bl_options = {'REGISTER'}
@@ -649,7 +649,8 @@ class GenerateSrcCollision(bpy.types.Operator):
 
                     # Add the processed hull to the new main object, which will store all of them
                     bm_processed = bmesh_join(bm_processed, bm_hull)
-                    total_hull_count += 1
+                    if not bpy.context.scene.SrcEngCollProperties.Post_Merge:
+                        total_hull_count += 1
                     bm_hull.clear()
                     bm_hull.free()
 
@@ -716,12 +717,178 @@ class GenerateSrcCollision(bpy.types.Operator):
 
         return {'FINISHED'}
     
+# Generate UV-based Collision operator
+
+
+class GenerateUVBasedCollision(bpy.types.Operator):
+    """Generate a collision model for every selected mesh object, based on the original mesh's UV Map. A collision hull is generated for every UV island"""
+    bl_idname = "object.src_eng_uv_collision"
+    bl_label = "Generate UV-based Collision"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+            print("At least one mesh object must be selected.")
+
+            return {'FINISHED'}
+
+        if len(objs) >= 1:
+            for obj in objs:
+                obj.select_set(False)
+
+            total_hull_count = 0
+            merge_distance = bpy.context.scene.SrcEngCollProperties.Merge_Distance
+
+            for obj in objs:
+                bpy.ops.object.select_all(action='DESELECT')
+                root_collection = None
+                if 'Collision Models' in bpy.data.collections.keys():
+                    root_collection = bpy.data.collections['Collision Models']
+                else:
+                    root_collection = bpy.data.collections.new("Collision Models")
+                    bpy.context.scene.collection.children.link(root_collection)
+
+                obj_collections = [
+                    c for c in bpy.data.collections if obj.name in c.objects.keys()]
+
+                obj_phys = None
+                collection_phys = None
+
+                bpy.ops.object.mode_set(mode="OBJECT")
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+
+                if (obj.name + "_phys") in bpy.data.objects.keys():
+                    bpy.data.objects.remove(bpy.data.objects[obj.name + "_phys"])
+
+                bpy.ops.object.duplicate(linked=False)
+                obj.hide_set(True)
+                obj_phys = bpy.context.active_object
+                obj_phys.name = obj.name + "_phys"
+
+                bpy.ops.object.make_single_user(object=True, obdata=True)
+                bpy.ops.object.transform_apply(
+                    location=True, rotation=True, scale=True)
+                bpy.ops.object.shade_smooth()
+                
+                # Split up object based on UV seams
+                bpy.ops.object.mode_set(mode="EDIT")
+                bpy.ops.mesh.reveal()
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.uv.select_all(action='SELECT')
+                bpy.ops.uv.seams_from_islands()
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.uv.select_all(action='DESELECT')
+                bpy.ops.object.mode_set(mode="OBJECT")
+
+                seams = [edge for edge in bpy.context.active_object.data.edges if edge.use_seam]
+                if len(seams) == 0:
+                    bpy.data.objects.remove(obj_phys)
+                    obj.hide_set(False)
+                    continue
+
+                for seam in seams:
+                        seam.select = True
+                    
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.edge_split(type='EDGE')
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+                bpy.ops.object.src_eng_cleanup_force_convex()
+
+                bpy.ops.object.mode_set(mode="EDIT")
+                bpy.ops.mesh.reveal()
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_all(action='SELECT')
+
+                if bpy.context.scene.SrcEngCollProperties.Dissolve:
+                    bpy.ops.mesh.tris_convert_to_quads(
+                        seam=True, sharp=True, materials=True)
+                    bpy.ops.mesh.dissolve_limited(
+                        angle_limit=0.0872665, delimit={'NORMAL'})
+
+                # Clean up mesh to minimize unnecessary hulls being generated later
+                bpy.ops.mesh.vert_connect_concave()
+                bpy.ops.mesh.face_make_planar(repeat=20)
+                bpy.ops.mesh.vert_connect_nonplanar()
+                bpy.ops.mesh.vert_connect_concave()
+                bpy.ops.mesh.vert_connect_nonplanar()
+                bpy.ops.mesh.decimate(
+                    ratio=bpy.context.scene.SrcEngCollProperties.Decimate_Ratio)
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.normals_make_consistent(inside=False)
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.shade_smooth()
+
+                # Setup collection
+                if (obj_phys.name.lower()) in bpy.data.collections.keys():
+                    collection_phys = bpy.data.collections[obj_phys.name.lower()]
+                else:
+                    collection_phys = bpy.data.collections.new(obj_phys.name.lower())
+                    root_collection.children.link(collection_phys)
+
+                collection_phys.objects.link(obj_phys)
+
+                # Unlink the new collision model from other collections
+                for c in obj_collections:
+                    if obj_phys.name in c.objects.keys():
+                        c.objects.unlink(obj_phys)
+                if obj_phys.name in bpy.context.scene.collection.objects.keys():
+                    bpy.context.scene.collection.objects.unlink(obj_phys)
+
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+                force_convex([bpy.context.active_object])
+                bm = bmesh.new()
+                bm.from_mesh(bpy.context.active_object.data)
+                total_hull_count += len([hull for hull in bmesh_get_hulls(bm, verts=bm.verts)])
+                bm.clear()
+                bm.free()
+
+                # Cleanup materials
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.context.active_object.data.materials.clear()
+                if "phys" not in bpy.data.materials.keys():
+                    bpy.data.materials.new("phys")
+                bpy.context.active_object.data.materials.append(
+                    bpy.data.materials["phys"])
+                bpy.context.active_object.data.materials[0].diffuse_color = (
+                    1, 0, 0.78315, 1)
+
+                # Finalize transforms and restore the original object's origin point
+                bpy.ops.object.transform_apply(
+                    location=False, rotation=True, scale=True)
+                bpy.context.scene.cursor.location = tuple(obj.location)
+                bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+                
+                # Optional post-merge
+                if bpy.context.scene.SrcEngCollProperties.Post_Merge:
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_all(action='SELECT')
+                    bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+                    bpy.ops.mesh.remove_doubles(threshold=merge_distance)
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                                    
+            obj_phys.select_set(True)
+            bpy.context.view_layer.objects.active = obj_phys
+
+            display_msg_box(
+                "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
+            print("Generated collision mesh(es) with total hull count of " +
+                str(total_hull_count) + ".")
+
+        return {'FINISHED'}
 
 # Fracture Generator operator
 
 class FractGenSrcCollision(bpy.types.Operator):
     """Produces a more accurate collision mesh that conforms better to the original shape. Works best on competely sealed objects with no holes. Requires the Cell Fracture addon to be enabled in Blender preferences"""
-    bl_idname = "object.fract_src_eng_collision"
+    bl_idname = "object.src_eng_fract_collision"
     bl_label = "Generate Fractured Collision"
     bl_options = {'REGISTER'}
 
@@ -2155,6 +2322,7 @@ class ConvexCut(bpy.types.Operator):
 
 ops = (
     GenerateSrcCollision,
+    GenerateUVBasedCollision,
     FractGenSrcCollision,
     SplitUpSrcCollision,
     GenerateSourceQC,
@@ -2224,7 +2392,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row4.prop(bpy.context.scene.SrcEngCollProperties, "Dissolve")
         row4.prop(bpy.context.scene.SrcEngCollProperties, "Post_Merge")
         row5.operator("object.src_eng_collision")
-        row6.operator("object.src_eng_split")
+        row6.operator("object.src_eng_uv_collision")
 
         # Fracture Generator UI
         boxFractGen = rowFractGen.box()
@@ -2236,7 +2404,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowFractGen4 = boxFractGen.row()
         rowFractGen4.prop(bpy.context.scene.SrcEngCollProperties, "Gap_Width")
         rowFractGen5 = boxFractGen.row()
-        rowFractGen5.operator("object.fract_src_eng_collision")
+        rowFractGen5.operator("object.src_eng_fract_collision")
 
         # Cleanup UI
         boxCleanup = rowCleanup.box()
@@ -2252,6 +2420,7 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup5 = boxCleanup.row()
         rowCleanup6 = boxCleanup.row()
         rowCleanup7 = boxCleanup.row()
+        rowCleanup8 = boxCleanup.row()
         boxCleanup.separator()
 
         rowCleanup1_Label.label(text="Similarity")
@@ -2264,9 +2433,10 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
             bpy.context.scene.SrcEngCollProperties, "Thin_Threshold")
         rowCleanup4.operator("object.src_eng_cleanup_remove_thin_hulls")
         rowCleanup5_Label.label(text="Other")
-        rowCleanup5.operator("object.src_eng_cleanup_force_convex")
-        rowCleanup6.operator("object.src_eng_cleanup_remove_inside")
-        rowCleanup7.operator("object.src_eng_cleanup_collection")
+        rowCleanup5.operator("object.src_eng_split")
+        rowCleanup6.operator("object.src_eng_cleanup_force_convex")
+        rowCleanup7.operator("object.src_eng_cleanup_remove_inside")
+        rowCleanup8.operator("object.src_eng_cleanup_collection")
 
         # Compile / QC UI
         boxQC = rowQC.box()
@@ -2315,6 +2485,7 @@ classes = (
     SrcEngCollGen_Panel,
     SrcEngCollProperties,
     GenerateSrcCollision,
+    GenerateUVBasedCollision,
     FractGenSrcCollision,
     SplitUpSrcCollision,
     GenerateSourceQC,
