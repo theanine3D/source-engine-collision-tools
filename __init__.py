@@ -1619,8 +1619,8 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
         objs = check_for_selected()
         if objs == False:
             display_msg_box(
-                "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
+                "At least one valid mesh object must be selected.", "Info", "INFO")
+            print("At least one valid mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -1706,7 +1706,8 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
                     bpy.data.objects.remove(h)
 
                 # Rejoin and clean up
-                bpy.ops.object.join()
+                if len([o for o in bpy.context.selected_objects if o.hide_get() == False]) > 1:
+                    bpy.ops.object.join()
                 bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
 
                 bpy.context.active_object.name = original_name
