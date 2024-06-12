@@ -707,9 +707,6 @@ class GenerateSrcCollision(bpy.types.Operator):
                     bm.clear()
                     bm.free()
                     
-            obj_phys.select_set(True)
-            bpy.context.view_layer.objects.active = obj_phys
-
             display_msg_box(
                 "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
             print("Generated collision mesh(es) with total hull count of " +
@@ -786,11 +783,6 @@ class GenerateUVBasedCollision(bpy.types.Operator):
                 bpy.ops.object.mode_set(mode="OBJECT")
 
                 seams = [edge for edge in bpy.context.active_object.data.edges if edge.use_seam]
-                if len(seams) == 0:
-                    bpy.data.objects.remove(obj_phys)
-                    obj.hide_set(False)
-                    continue
-
                 for seam in seams:
                         seam.select = True
                     
@@ -875,10 +867,6 @@ class GenerateUVBasedCollision(bpy.types.Operator):
                     bpy.ops.mesh.remove_doubles(threshold=merge_distance)
                     bpy.ops.object.mode_set(mode='OBJECT')
             
-            if obj_phys:
-                obj_phys.select_set(True)
-                bpy.context.view_layer.objects.active = obj_phys
-
             display_msg_box(
                 "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
             print("Generated collision mesh(es) with total hull count of " +
