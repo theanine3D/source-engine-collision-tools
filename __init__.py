@@ -161,7 +161,8 @@ def check_for_selected():
 
     for o in bpy.context.selected_objects:
         if o.type == "MESH" and not o.hide_get():
-            mesh_objs.append(o)
+            if len(o.data.polygons) > 0:
+                mesh_objs.append(o)
     
     # Check if any objects are selected.
     if len(mesh_objs) >= 1:
@@ -518,8 +519,8 @@ class GenerateSrcCollision(bpy.types.Operator):
         objs = check_for_selected()
         if objs == False:
             display_msg_box(
-                "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
+                "At least one valid mesh object must be selected.", "Info", "INFO")
+            print("At least one valid mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -790,7 +791,7 @@ class GenerateUVBasedCollision(bpy.types.Operator):
                 bpy.ops.mesh.edge_split(type='EDGE')
                 bpy.ops.object.mode_set(mode='OBJECT')
 
-                bpy.ops.object.src_eng_cleanup_force_convex()
+                force_convex([obj_phys])
 
                 bpy.ops.object.mode_set(mode="EDIT")
                 bpy.ops.mesh.reveal()
@@ -1876,6 +1877,8 @@ class RecommendedCollSettings(bpy.types.Operator):
         if check_for_selected():
 
             obj = bpy.context.active_object
+            if len(obj.data.polygons) == 0:
+                return {'FINISHED'}
 
             avg_dimensions = 0
             for d in list(obj.dimensions):
