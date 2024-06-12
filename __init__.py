@@ -778,6 +778,7 @@ class GenerateUVBasedCollision(bpy.types.Operator):
                 bpy.ops.object.mode_set(mode="EDIT")
                 bpy.ops.mesh.reveal()
                 bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.remove_doubles(threshold=merge_distance)
                 bpy.ops.uv.select_all(action='SELECT')
                 bpy.ops.uv.seams_from_islands()
                 bpy.ops.mesh.select_all(action='DESELECT')
@@ -873,9 +874,10 @@ class GenerateUVBasedCollision(bpy.types.Operator):
                     bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
                     bpy.ops.mesh.remove_doubles(threshold=merge_distance)
                     bpy.ops.object.mode_set(mode='OBJECT')
-                                    
-            obj_phys.select_set(True)
-            bpy.context.view_layer.objects.active = obj_phys
+            
+            if obj_phys:
+                obj_phys.select_set(True)
+                bpy.context.view_layer.objects.active = obj_phys
 
             display_msg_box(
                 "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
