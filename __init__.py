@@ -16,7 +16,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 4, 0),
+    "version": (1, 4, 1),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -1785,13 +1785,7 @@ class GenerateSourceQC(bpy.types.Operator):
             empty_smd_file.writelines(generate_SMD_lines())
 
         # Generate the transparent physics VTF/VMT
-        shutil.copy(addon_path + "/phys.vtf", QC_folder + "/phys.vtf")
         shutil.copy(addon_path + "/phys.vmt", QC_folder + "/phys.vmt")
-        with open(QC_folder + "/phys.vmt", 'r') as phys_vmt:
-            content = phys_vmt.read()
-        content = content.replace("models/", mats_dir)
-        with open(QC_folder + "/phys.vmt", 'w') as phys_vmt:
-            phys_vmt.write(content)
 
         display_msg_box("QC files generated successfully in " + QC_folder +
                         "\n\nYou will still need to export your collision models as SMD through other means (ie. Blender Source Tools or SourceOps)", "Info", "INFO")
