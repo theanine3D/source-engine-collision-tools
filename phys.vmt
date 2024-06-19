@@ -1,5 +1,4 @@
 "UnlitGeneric"
 {
-	"$basetexture" "models/phys"
-	"$alphatest" 1
+	"$no_draw" 1
 }
