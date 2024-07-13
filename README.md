@@ -57,7 +57,7 @@ Click the image below to watch a breakdown video of all the features in the addo
 [![YouTube Video](https://user-images.githubusercontent.com/88953117/219478247-5763224f-5bb2-443d-81ee-b17532cbb7c4.png)](https://www.youtube.com/watch?v=ASLw-FMQUXM)
 
 ### Gallery
-The maps or models below were created using Source Engine Collision Tools.
+The maps below were created using Source Engine Collision Tools. (If you're a mapper and you'd like to list your map here, send me a message!)
 
 #### Saturn Valley - TF2 map by Theanine3D
 
