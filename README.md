@@ -55,3 +55,10 @@ Some features are customizeable and can be tweaked via optional settings. There 
 Click the image below to watch a breakdown video of all the features in the addon.
 
 [![YouTube Video](https://user-images.githubusercontent.com/88953117/219478247-5763224f-5bb2-443d-81ee-b17532cbb7c4.png)](https://www.youtube.com/watch?v=ASLw-FMQUXM)
+
+### Gallery
+The maps or models below were created using Source Engine Collision Tools.
+
+#### Saturn Valley - model-based TF2 map
+
+[![YouTube Video](https://github.com/user-attachments/assets/28a24da2-f792-4ab3-abb9-473d3a75bfc0)](https://www.youtube.com/watch?v=jbJhX8MaSDQ)
