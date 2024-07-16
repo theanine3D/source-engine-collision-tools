@@ -16,7 +16,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 4, 1),
+    "version": (1, 4, 2),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -885,10 +885,15 @@ class FractGenSrcCollision(bpy.types.Operator):
 
     def execute(self, context):
         # Check for Cell Fracture addon (dependency)
-        if not "object_fracture_cell" in bpy.context.preferences.addons.keys():
+        try:
+            bpy.ops.object.add_fracture_cell_objects(source={})
+        except AttributeError:
+            print("\nERROR: Cell fracture addon not found.\n")
             display_msg_box(
                 "You must first enable the Cell Fracture addon in your Blender preferences. It's required by this feature.", "Error", "ERROR")
             return {'FINISHED'}
+        except TypeError:
+            print("\nCell fracture addon found.\n")
         
         objs = check_for_selected()
         if objs == False:
