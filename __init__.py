@@ -9,14 +9,13 @@ import os
 import sys
 import shutil
 addon_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(addon_path)
-from PyVMF.PyVMF import *
+from .PyVMF import *
 
 bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 4, 2),
+    "version": (1, 4, 3),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",

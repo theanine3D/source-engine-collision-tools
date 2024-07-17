@@ -1,0 +1,21 @@
+schema_version = "1.0.0"
+
+id = "sourceenginecollisiontools"
+version = "1.4.3"
+name = "Source Engine Collision Tools"
+tagline = "Generate & optimize collision models for use in Source Engine"
+maintainer = "Theanine3D <theanine3d@gmail.com>"
+
+type = "add-on"
+
+files = "Export collision-related QC and VMF files"
+
+website = "https://github.com/theanine3D/source-engine-collision-tools"
+
+tags = ["Mesh", "Object"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+
+copyright = ["2024 Pedro Valencia"]
