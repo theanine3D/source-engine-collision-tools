@@ -57,6 +57,10 @@ Click the image below to watch a breakdown video of all the features in the addo
 
 [![YouTube Video](https://user-images.githubusercontent.com/88953117/219478247-5763224f-5bb2-443d-81ee-b17532cbb7c4.png)](https://www.youtube.com/watch?v=ASLw-FMQUXM)
 
+This video below shows some newer features that have been added since the previous video.
+
+[![YouTube Video](https://github.com/user-attachments/assets/7244d17f-90cb-40fc-9117-e9aa341ea8d5)](https://youtu.be/yWF5ngntf5A)
+
 ### Gallery
 The maps below were created using Source Engine Collision Tools. (If you're a mapper and you'd like to list your map here, send me a message!)
 
