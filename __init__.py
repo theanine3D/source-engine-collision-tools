@@ -15,7 +15,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 4, 3),
+    "version": (1, 4, 4),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -515,6 +515,7 @@ class GenerateSrcCollision(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
+
         objs = check_for_selected()
         if objs == False:
             display_msg_box(
@@ -522,6 +523,8 @@ class GenerateSrcCollision(bpy.types.Operator):
             print("At least one valid mesh object must be selected.")
 
             return {'FINISHED'}
+
+        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             for obj in objs:
@@ -531,6 +534,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             extrude_modifier = (-1) * \
                 bpy.context.scene.SrcEngCollProperties.Extrusion_Modifier
             merge_distance = bpy.context.scene.SrcEngCollProperties.Merge_Distance
+            original_pivot = bpy.context.scene.tool_settings.transform_pivot_point
 
             for obj in objs:
                 bpy.ops.object.select_all(action='DESELECT')
@@ -692,7 +696,7 @@ class GenerateSrcCollision(bpy.types.Operator):
                     location=False, rotation=True, scale=True)
                 bpy.context.scene.cursor.location = tuple(obj.location)
                 bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-                
+
                 # Optional post-merge
                 if bpy.context.scene.SrcEngCollProperties.Post_Merge:
                     bpy.ops.object.mode_set(mode='EDIT')
@@ -706,11 +710,15 @@ class GenerateSrcCollision(bpy.types.Operator):
                     total_hull_count = len([hull for hull in bmesh_get_hulls(bm, verts=bm.verts)])
                     bm.clear()
                     bm.free()
-                    
+
+            bpy.context.scene.tool_settings.transform_pivot_point = original_pivot
+
             display_msg_box(
                 "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
             print("Generated collision mesh(es) with total hull count of " +
                 str(total_hull_count) + ".")
+
+        bpy.context.preferences.edit.use_global_undo = True
 
         return {'FINISHED'}
     
@@ -731,6 +739,8 @@ class GenerateUVBasedCollision(bpy.types.Operator):
             print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
+
+        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             for obj in objs:
@@ -872,6 +882,8 @@ class GenerateUVBasedCollision(bpy.types.Operator):
             print("Generated collision mesh(es) with total hull count of " +
                 str(total_hull_count) + ".")
 
+        bpy.context.preferences.edit.use_global_undo = True
+
         return {'FINISHED'}
 
 # Fracture Generator operator
@@ -901,6 +913,8 @@ class FractGenSrcCollision(bpy.types.Operator):
             print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
+
+        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             fracture_target = bpy.context.scene.SrcEngCollProperties.Fracture_Target
@@ -1071,7 +1085,9 @@ class FractGenSrcCollision(bpy.types.Operator):
             display_msg_box(
                 "Generated collision mesh, with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
             print("Generated collision mesh with total hull count of " +
-                  str(total_hull_count) + ".")
+                str(total_hull_count) + ".")
+
+        bpy.context.preferences.edit.use_global_undo = True
 
         return {'FINISHED'}
 
@@ -1093,6 +1109,8 @@ class SplitUpSrcCollision(bpy.types.Operator):
             print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
+
+        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             total_part_count = 0
@@ -1212,6 +1230,8 @@ class SplitUpSrcCollision(bpy.types.Operator):
         print("Split up collision mesh into " +
                 total_part_count + " part(s).")
 
+        bpy.context.preferences.edit.use_global_undo = True
+
         return {'FINISHED'}
 
 
@@ -1231,6 +1251,8 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
             print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
+
+        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             initial_hull_count = 0
@@ -1451,10 +1473,11 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
             print(
                 "Processed original " + str(initial_hull_count) + " hull(s).\nMerged " + str(merged_count) + " total hull(s).")
 
+        bpy.context.preferences.edit.use_global_undo = True
+
         return {'FINISHED'}
 
 # Remove Thin Hulls operator
-
 
 class Cleanup_RemoveThinHulls(bpy.types.Operator):
     """Removes hulls that are much smaller than the average hull volume, based on the Thin Threshold setting"""
@@ -1470,6 +1493,8 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
             print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
+
+        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             amount_removed = 0
@@ -1583,6 +1608,8 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
             print(
                 "Removed " + str(amount_removed) + " hull(s)")
 
+        bpy.context.preferences.edit.use_global_undo = True
+
         return {'FINISHED'}
 
 # Force Convex operator
@@ -1627,6 +1654,8 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
             print("At least one valid mesh object must be selected.")
 
             return {'FINISHED'}
+
+        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             for obj in objs:
@@ -1729,6 +1758,8 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
             display_msg_box(
                 "Removed " + str(amount_to_remove) + " hull(s).", "Info", "INFO")
             print("Removed " + str(amount_to_remove) + " hull(s).")
+
+        bpy.context.preferences.edit.use_global_undo = True
 
         return {'FINISHED'}
 
@@ -2101,7 +2132,7 @@ class ExportVMF(bpy.types.Operator):
 
             for obj in objs:
                 bpy.ops.object.select_all(action='DESELECT')
-              
+
                 # Prep the meshes first
                 bpy.context.view_layer.objects.active = obj
                 obj.select_set(True)
@@ -2257,7 +2288,7 @@ class CleanupCollection(bpy.types.Operator):
             display_msg_box("Removed " + str(removed_count) +
                             " collection(s)", "Info", "INFO")
             print("Removed  " + str(removed_count) +
-                  " collection(s)")
+                " collection(s)")
         else:
             display_msg_box(
                 "There is no 'Collision Models' collection to clean up", "Info", "INFO")
