@@ -15,7 +15,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 5, 0),
+    "version": (1, 5, 1),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -524,6 +524,7 @@ class GenerateSrcCollision(bpy.types.Operator):
 
             return {'FINISHED'}
 
+        original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
@@ -718,7 +719,7 @@ class GenerateSrcCollision(bpy.types.Operator):
             print("Generated collision mesh(es) with total hull count of " +
                 str(total_hull_count) + ".")
 
-        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
     
@@ -740,6 +741,7 @@ class GenerateUVBasedCollision(bpy.types.Operator):
 
             return {'FINISHED'}
 
+        original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
@@ -882,7 +884,7 @@ class GenerateUVBasedCollision(bpy.types.Operator):
             print("Generated collision mesh(es) with total hull count of " +
                 str(total_hull_count) + ".")
 
-        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
 
@@ -895,6 +897,9 @@ class FractGenSrcCollision(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
+        original_undo = bpy.context.preferences.edit.use_global_undo
+        bpy.context.preferences.edit.use_global_undo = False
+
         # Check for Cell Fracture addon (dependency)
         try:
             bpy.ops.object.add_fracture_cell_objects(source={})
@@ -902,19 +907,22 @@ class FractGenSrcCollision(bpy.types.Operator):
             print("\nERROR: Cell fracture addon not found.\n")
             display_msg_box(
                 "You must first enable the Cell Fracture addon in your Blender preferences. It's required by this feature.", "Error", "ERROR")
+            
+            bpy.context.preferences.edit.use_global_undo = original_undo
             return {'FINISHED'}
+        
         except TypeError:
             print("\nCell fracture addon found.\n")
         
         objs = check_for_selected()
         if objs == False:
+
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
             print("At least one mesh object must be selected.")
-
+            
+            bpy.context.preferences.edit.use_global_undo = original_undo
             return {'FINISHED'}
-
-        bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
             fracture_target = bpy.context.scene.SrcEngCollProperties.Fracture_Target
@@ -1087,7 +1095,7 @@ class FractGenSrcCollision(bpy.types.Operator):
             print("Generated collision mesh with total hull count of " +
                 str(total_hull_count) + ".")
 
-        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
 
@@ -1110,6 +1118,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
 
             return {'FINISHED'}
 
+        original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
@@ -1230,7 +1239,7 @@ class SplitUpSrcCollision(bpy.types.Operator):
         print("Split up collision mesh into " +
                 total_part_count + " part(s).")
 
-        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
 
@@ -1252,6 +1261,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
             return {'FINISHED'}
 
+        original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
@@ -1473,7 +1483,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
             print(
                 "Processed original " + str(initial_hull_count) + " hull(s).\nMerged " + str(merged_count) + " total hull(s).")
 
-        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
 
@@ -1494,6 +1504,7 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
 
             return {'FINISHED'}
 
+        original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
@@ -1608,7 +1619,7 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
             print(
                 "Removed " + str(amount_removed) + " hull(s)")
 
-        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
 
@@ -1655,6 +1666,7 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
 
             return {'FINISHED'}
 
+        original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
 
         if len(objs) >= 1:
@@ -1759,7 +1771,7 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
                 "Removed " + str(amount_to_remove) + " hull(s).", "Info", "INFO")
             print("Removed " + str(amount_to_remove) + " hull(s).")
 
-        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
 
@@ -1773,6 +1785,7 @@ class GenerateSourceQC(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
+        
         surfaceprop = bpy.context.scene.SrcEngCollProperties.QC_SurfaceProp
         QC_folder = bpy.path.abspath(
             bpy.context.scene.SrcEngCollProperties.QC_Folder)
