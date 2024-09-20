@@ -10,7 +10,7 @@ Some features are customizeable and can be tweaked via optional settings. There 
   - Supports (optional) decimation, to automatically reduce the complexity of the resulting collision model
 - **Generate UV-based Collision** - Generates a collision mesh for the currently selected objects, based on each object's UV Map. Each UV island becomes a separate hull.
 - **Generate Fractured Collision** - This operator uses the Cell Fracture addon built into Blender to generate more accurate and performant collision meshes for Source Engine. However, unlike the above operator, it is intended to be used on individual props, not entire scenes at once. Works best on fully sealed objects with no holes or non-manifold geometry.
-  - Automatically creates a gap between collision hulls to prevent overlapping. The size of the gap is determined by the "Gap Width" setting
+  - This collision method is unique in that it also creates a gap between collision hulls to prevent overlapping. The size of the gap is determined by the "Gap Width" setting
   - Attempts to generate only the amount of hulls specified by the "Fracture Target" setting. ie. A "Fracture Target" of 4 will try to split up the model into only 4 parts.
   - Note that the Cell Fracture addon needs to be enabled in your Blender preferences first!
 
