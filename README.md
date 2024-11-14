@@ -4,6 +4,9 @@ Blender (3.x+ / 4.x+) addon for generating and optimizing collision models for u
 Finding this addon useful? Please consider starring it ⭐, or donating 🙂<br>
 [![image](https://user-images.githubusercontent.com/88953117/232652206-a5b7c5a1-d4cc-40ec-88d7-d3a5886d8f55.png)](https://www.paypal.com/donate/?hosted_button_id=K63REE7KJ3WUY)
 
+Need help with the addon? You can join my Discord server and reach out for help there.
+https://discord.gg/gdu5myxw
+
 ## Features
 Some features are customizeable and can be tweaked via optional settings. There is also a "Recommended Settings" button that will automatically guess the best settings for you based on the currently selected, active object.
 - **Generate Collision Mesh** - Generate a Source Engine-compliant collision model for every currently selected object.
