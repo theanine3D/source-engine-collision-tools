@@ -1029,53 +1029,18 @@ class GenerateFromFracture(bpy.types.Operator):
                         bpy.ops.mesh.select_all(action='DESELECT')
                         bpy.ops.object.mode_set(mode="OBJECT")
 
-                # Limited dissolve
+                # Decimate and Limited dissolve
                 bpy.ops.object.mode_set(mode="EDIT")
                 bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.decimate(
+                    ratio=bpy.context.scene.SrcEngCollProperties.Decimate_Ratio)
                 bpy.ops.mesh.dissolve_limited(
                     angle_limit=0.16, delimit={'NORMAL'})
                 bpy.ops.mesh.quads_convert_to_tris(
                     quad_method='BEAUTY', ngon_method='BEAUTY')
                 bpy.ops.object.mode_set(mode="OBJECT")
-
-                # Begin force convex
-                me = obj_phys.data
-                bm = bmesh.new()
-                bm_processed = bmesh.new()
-
-                bm.from_mesh(me)
-                hulls = [hull for hull in bmesh_get_hulls(
-                    bm, verts=bm.verts)]
-
-                # Create individual hull bmeshes
-                for hull in hulls:
-                    bm_hull = bmesh.new()
-
-                    # Add vertices to individual bmesh hull
-                    for vert in hull:
-                        bmesh.ops.create_vert(bm_hull, co=vert.co)
-
-                    # Generate convex hull
-                    ch = bmesh.ops.convex_hull(
-                        bm_hull, input=bm_hull.verts, use_existing_faces=False)
-                    bmesh.ops.delete(
-                        bm_hull,
-                        geom=list(set(ch["geom_unused"] + ch["geom_interior"])),
-                        context='VERTS')
-
-                    # Add the processed hull to the new main object, which will store all of them
-                    bmesh_join(bm_processed, bm_hull)
-                    total_hull_count += 1
-                    bm_hull.clear()
-                    bm_hull.free()
-
-                bm_processed.to_mesh(me)
-                me.update()
-                bm.clear()
-                bm.free()
-                bm_processed.clear()
-                bm_processed.free()
-                # End force convex
+            
+                force_convex([obj_phys])
 
                 # Begin finalizing
                 bpy.ops.object.mode_set(mode='OBJECT')
