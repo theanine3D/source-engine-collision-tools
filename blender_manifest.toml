@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "sourceenginecollisiontools"
-version = "1.5.1"
+version = "2.0.0"
 name = "Source Engine Collision Tools"
 tagline = "Generate & optimize collision models for use in Source Engine"
 maintainer = "Theanine3D <theanine3d@gmail.com>"
