@@ -9,10 +9,11 @@ https://discord.gg/gdu5myxw
 
 ## Features
 Some features are customizeable and can be tweaked via optional settings. There is also a "Recommended Settings" button that will automatically guess the best settings for you based on the currently selected, active object.
-- **Generate Collision Mesh** - Generate a Source Engine-compliant collision model for every currently selected object.
-  - Supports (optional) decimation, to automatically reduce the complexity of the resulting collision model
-- **Generate UV-based Collision** - Generates a collision mesh for the currently selected objects, based on each object's UV Map. Each UV island becomes a separate hull.
-- **Generate Fractured Collision** - This operator uses the Cell Fracture addon built into Blender to generate more accurate and performant collision meshes for Source Engine. However, unlike the above operator, it is intended to be used on individual props, not entire scenes at once. Works best on fully sealed objects with no holes or non-manifold geometry.
+Note that all of the "Generate" features support the Decimate Ratio setting, to automatically reduce the complexity of the resulting collision model.
+- **Generate Collision via Bisection** - Generate a Source Engine-compliant collision model for every currently selected object, by using Blender's own built-in Bisect tool to divide up the model into sections first.
+- **Generate Collision from Faces** - Generate a Source Engine-compliant collision model for every currently selected object, based on the mesh's faces/polygons.
+- **Generate Collision via UV Map** - Generates a collision mesh for the currently selected objects, based on each object's UV Map. Each UV island becomes a separate hull.
+- **Generate Collision via Fracture** - This operator uses the Cell Fracture addon built into Blender to generate more accurate and performant collision meshes for Source Engine. However, unlike the above operator, it is intended to be used on individual props, not entire scenes at once. Works best on fully sealed objects with no holes or non-manifold geometry.
   - This collision method is unique in that it also creates a gap between collision hulls to prevent overlapping. The size of the gap is determined by the "Gap Width" setting
   - Attempts to generate only the amount of hulls specified by the "Fracture Target" setting. ie. A "Fracture Target" of 4 will try to split up the model into only 4 parts.
   - Note that the Cell Fracture addon needs to be enabled in your Blender preferences first!
@@ -47,9 +48,11 @@ Some features are customizeable and can be tweaked via optional settings. There 
 ## Previews ##
 ### Interface ###
 ![image](https://github.com/theanine3D/source-engine-collision-tools/assets/88953117/65c5a386-fb52-4128-889c-de40d2deb15d)
-### Generate Fractured Collision ###
+### Generate Collision by Bisection ###
+![generate-by-bisection](https://github.com/user-attachments/assets/598a1280-7f10-4b24-ab31-533ad00c6d88)
+### Generate Collision by Fracture ###
 ![Untitled](https://user-images.githubusercontent.com/88953117/231557347-ce472d26-0634-4db9-a18f-0d1e7891a019.gif)
-### Generate Collision Mesh
+### Generate Collision from Faces
 ![collision-gen-1](https://user-images.githubusercontent.com/88953117/212523161-07296101-d80f-4d7e-8cbe-5ccbc93425ba.gif)
 ### Merge Adjacent Similars ###
 ![merge-similars](https://user-images.githubusercontent.com/88953117/213289714-d13d5bb8-ef37-439e-8eac-1370b4716bab.gif)
