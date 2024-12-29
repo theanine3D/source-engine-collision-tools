@@ -1,12 +1,8 @@
 import bpy
 import bmesh
 import mathutils
-from bpy.utils import register_class, unregister_class
-from bpy.types import Panel, PropertyGroup
-from bpy.props import IntProperty, StringProperty, FloatProperty, BoolProperty
 import re
 import os
-import sys
 import shutil
 addon_path = os.path.dirname(os.path.abspath(__file__))
 from .PyVMF import *
@@ -15,7 +11,7 @@ bl_info = {
     "name": "Source Engine Collision Tools",
     "description": "Quickly generate and optimize collision models for use in Source Engine",
     "author": "Theanine3D",
-    "version": (1, 5, 1),
+    "version": (2, 0, 0),
     "blender": (3, 0, 0),
     "category": "Mesh",
     "location": "Properties -> Object Properties",
@@ -48,10 +44,10 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         soft_max=32,
         min=2,
         default=4)
-    Gap_Width: bpy.props.FloatProperty(
+    Fracture_Gap: bpy.props.FloatProperty(
         name="Gap Width",
         subtype="FACTOR",
-        description="How wide the gaps between each hull should be after running the Generate Fractured Collision operator",
+        description="How large or small the gap between hulls should be. Used only by the Fracture and Bisection generation methods",
         soft_max=1,
         min=0,
         default=0.02)
@@ -137,7 +133,29 @@ class SrcEngCollProperties(bpy.types.PropertyGroup):
         description="The texture to apply to brushes exported as VMF",
         default="tools/toolsnodraw"
     )
-
+    Bisect_Gap: bpy.props.FloatProperty(
+        name="Gap Width",
+        subtype="FACTOR",
+        description="How big the gap should be between bisected sections",
+        min=0.001,
+        max=.3,
+        default=.02)
+    Bisections: bpy.props.IntProperty(
+        name="Bisections",
+        subtype="UNSIGNED",
+        description="How many times should the model be bisected along the middle by the 'Generate by Bisection' tool.",
+        soft_max=32,
+        min=2,
+        default=4)
+    Bisect_Mode: bpy.props.EnumProperty(
+        items= [
+                ("xy", "Sides", "Cuts along the X/Y axes, resulting in horizontally flat hulls"),
+                ("z", "Top/Bottom", "Cuts along the Z axis, resulting in vertical hulls"),
+                ],
+        name="Mode",
+        description="The method used when bisecting the model to generate the hulls",
+        default="xy"
+    )
 # FUNCTION DEFINITIONS
 
 
@@ -150,6 +168,7 @@ def display_msg_box(message="", title="Info", icon='INFO'):
         lines = message.split("\n")
         for line in lines:
             self.layout.label(text=line)
+            print(line)
 
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
@@ -449,7 +468,6 @@ def force_convex(objs):
             bm.from_mesh(me)
             hulls = [hull for hull in bmesh_get_hulls(
                 bm, verts=bm.verts)]
-            print("Hulls to process:", len(hulls))
 
             # Create individual hull bmeshes
             for hull in hulls:
@@ -503,15 +521,21 @@ def force_convex(objs):
             bpy.ops.object.mode_set(mode='OBJECT')
             
     return total_hull_count
-    
+
+def set_origin(location):
+    saved_location = bpy.context.scene.cursor.location
+    bpy.context.scene.cursor.location = location
+    bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+    bpy.context.scene.cursor.location = saved_location
+
 
 # Generate Collision Mesh operator
 
 
-class GenerateSrcCollision(bpy.types.Operator):
-    """Generate a Source Engine-compliant collision model for all selected mesh objects. The original object(s) will be temporarily hidden, but not modified otherwise"""
-    bl_idname = "object.src_eng_collision"
-    bl_label = "Generate Collision Mesh"
+class GenerateFromFaces(bpy.types.Operator):
+    """Generate a Source Engine-compliant collision model for all selected mesh objects, based on their polygon faces. The original object(s) will be temporarily hidden, but not modified otherwise"""
+    bl_idname = "object.src_eng_gen_faces"
+    bl_label = "Generate Collision from Faces"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -520,12 +544,13 @@ class GenerateSrcCollision(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one valid mesh object must be selected.", "Info", "INFO")
-            print("At least one valid mesh object must be selected.")
 
             return {'FINISHED'}
 
         original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
+
+        obj_results = []
 
         if len(objs) >= 1:
             for obj in objs:
@@ -634,7 +659,6 @@ class GenerateSrcCollision(bpy.types.Operator):
                 bm.from_mesh(me)
                 hulls = [hull for hull in bmesh_get_hulls(
                     bm, verts=bm.verts)]
-                print("Hulls to process:", len(hulls))
 
                 # Create individual hull bmeshes
                 for hull in hulls:
@@ -711,14 +735,18 @@ class GenerateSrcCollision(bpy.types.Operator):
                     total_hull_count = len([hull for hull in bmesh_get_hulls(bm, verts=bm.verts)])
                     bm.clear()
                     bm.free()
+                
+                obj_results.append(obj_phys.name)
+                obj.select_set(False)
 
             bpy.context.scene.tool_settings.transform_pivot_point = original_pivot
 
             display_msg_box(
                 "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
-            print("Generated collision mesh(es) with total hull count of " +
-                str(total_hull_count) + ".")
 
+        for obj in obj_results:
+            bpy.data.objects[obj].select_set(True)
+            
         bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
@@ -726,10 +754,10 @@ class GenerateSrcCollision(bpy.types.Operator):
 # Generate UV-based Collision operator
 
 
-class GenerateUVBasedCollision(bpy.types.Operator):
+class GenerateFromUVMap(bpy.types.Operator):
     """Generate a collision model for every selected mesh object, based on the original mesh's UV Map. A collision hull is generated for every UV island"""
-    bl_idname = "object.src_eng_uv_collision"
-    bl_label = "Generate UV-based Collision"
+    bl_idname = "object.src_eng_gen_uvmap"
+    bl_label = "Generate Collision via UV Map"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -737,12 +765,13 @@ class GenerateUVBasedCollision(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
 
         original_undo = bpy.context.preferences.edit.use_global_undo
         bpy.context.preferences.edit.use_global_undo = False
+
+        obj_results = []
 
         if len(objs) >= 1:
             for obj in objs:
@@ -752,6 +781,11 @@ class GenerateUVBasedCollision(bpy.types.Operator):
             merge_distance = bpy.context.scene.SrcEngCollProperties.Merge_Distance
 
             for obj in objs:
+
+                # Check if this mesh object even has a UV Map first. If it doesn't, skip it.
+                if len(obj.data.uv_layers) == 0:
+                    continue
+
                 bpy.ops.object.select_all(action='DESELECT')
                 root_collection = None
                 if 'Collision Models' in bpy.data.collections.keys():
@@ -878,11 +912,15 @@ class GenerateUVBasedCollision(bpy.types.Operator):
                     bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
                     bpy.ops.mesh.remove_doubles(threshold=merge_distance)
                     bpy.ops.object.mode_set(mode='OBJECT')
-            
-            display_msg_box(
-                "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
-            print("Generated collision mesh(es) with total hull count of " +
-                str(total_hull_count) + ".")
+                    
+                obj_results.append(obj_phys.name)
+                obj.select_set(False)
+
+        display_msg_box(
+            "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
+
+        for obj in obj_results:
+            bpy.data.objects[obj].select_set(True)
 
         bpy.context.preferences.edit.use_global_undo = original_undo
 
@@ -890,10 +928,10 @@ class GenerateUVBasedCollision(bpy.types.Operator):
 
 # Fracture Generator operator
 
-class FractGenSrcCollision(bpy.types.Operator):
+class GenerateFromFracture(bpy.types.Operator):
     """Produces a more accurate collision mesh that conforms better to the original shape. Works best on competely sealed objects with no holes. Requires the Cell Fracture addon to be enabled in Blender preferences"""
-    bl_idname = "object.src_eng_fract_collision"
-    bl_label = "Generate Fractured Collision"
+    bl_idname = "object.src_eng_gen_fracture"
+    bl_label = "Generate Collision via Fracture"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -904,7 +942,6 @@ class FractGenSrcCollision(bpy.types.Operator):
         try:
             bpy.ops.object.add_fracture_cell_objects(source={})
         except AttributeError:
-            print("\nERROR: Cell fracture addon not found.\n")
             display_msg_box(
                 "You must first enable the Cell Fracture addon in your Blender preferences. It's required by this feature.", "Error", "ERROR")
             
@@ -919,15 +956,16 @@ class FractGenSrcCollision(bpy.types.Operator):
 
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
             
             bpy.context.preferences.edit.use_global_undo = original_undo
             return {'FINISHED'}
 
+        obj_results = []
+
         if len(objs) >= 1:
             fracture_target = bpy.context.scene.SrcEngCollProperties.Fracture_Target
             voxel_res = bpy.context.scene.SrcEngCollProperties.Voxel_Resolution
-            gap_width = bpy.context.scene.SrcEngCollProperties.Gap_Width
+            gap_width = bpy.context.scene.SrcEngCollProperties.Fracture_Gap
             total_hull_count = 0
             
             for obj in objs:
@@ -1008,7 +1046,6 @@ class FractGenSrcCollision(bpy.types.Operator):
                 bm.from_mesh(me)
                 hulls = [hull for hull in bmesh_get_hulls(
                     bm, verts=bm.verts)]
-                print("Hulls to process:", len(hulls))
 
                 # Create individual hull bmeshes
                 for hull in hulls:
@@ -1089,15 +1126,461 @@ class FractGenSrcCollision(bpy.types.Operator):
                     bpy.data.materials["phys"])
                 obj_phys.data.materials[0].diffuse_color = (
                     1, 0, 0.78315, 1)
+                
+                obj_results.append(obj_phys.name)
+                obj.select_set(False)
 
             display_msg_box(
                 "Generated collision mesh, with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
-            print("Generated collision mesh with total hull count of " +
-                str(total_hull_count) + ".")
+
+        for obj in obj_results:
+            bpy.data.objects[obj].select_set(True)
 
         bpy.context.preferences.edit.use_global_undo = original_undo
 
         return {'FINISHED'}
+
+
+class GenerateFromBisection(bpy.types.Operator):
+    """Generate a collision model for every selected mesh object, by bisecting each object repeatedly by a specified number of cuts along the X, Y, and/or Z axes"""
+    bl_idname = "object.src_eng_gen_bisect"
+    bl_label = "Generate Collision via Bisection"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        objs = check_for_selected()
+        if objs == False:
+            display_msg_box(
+                "At least one mesh object must be selected.", "Info", "INFO")
+
+            return {'FINISHED'}
+        
+        gap_width = bpy.context.scene.SrcEngCollProperties.Bisect_Gap
+        cuts = bpy.context.scene.SrcEngCollProperties.Bisections
+        slice_mode = bpy.context.scene.SrcEngCollProperties.Bisect_Mode
+        merge_distance = bpy.context.scene.SrcEngCollProperties.Merge_Distance
+        
+        original_undo = bpy.context.preferences.edit.use_global_undo
+        bpy.context.preferences.edit.use_global_undo = False
+
+        obj_results = []
+
+        def gen_bisect_setup(obj):
+            obj.hide_set(False)
+
+            obj_phys = obj.copy()
+            obj_phys.data = obj.data.copy()
+            obj_phys.name = obj.name.lower() + "_phys"
+            bpy.context.collection.objects.link(obj_phys)
+            obj_phys.select_set(True)
+            obj.select_set(False)
+            obj.hide_set(True)
+            bpy.context.view_layer.objects.active = obj_phys
+            bpy.ops.object.make_single_user(object=True, obdata=True)
+            bpy.ops.object.transform_apply(
+                location=False, rotation=True, scale=True)
+            set_origin(obj.location)
+            bpy.ops.object.shade_smooth()
+            bpy.ops.object.convert(target='MESH')
+
+            obj_bbox = obj_phys.copy()
+            obj_bbox.data = obj_phys.data.copy()
+            bpy.context.collection.objects.link(obj_bbox)
+            obj_bbox.name = obj.name.lower() + "_bbox"
+            me = obj_bbox.data
+            
+            obj_phys.select_set(False)
+            obj_phys.hide_set(True)
+            obj_bbox.select_set(True)
+            bpy.context.view_layer.objects.active = obj_bbox
+            set_origin(obj.location)
+            obj_phys.hide_set(False)
+            obj_phys.select_set(True)
+            obj_bbox.select_set(False)
+            bpy.context.view_layer.objects.active = obj_phys
+
+            bm = bmesh.new()
+
+            verts = [bm.verts.new(b) for b in obj_bbox.bound_box]
+            bmesh.ops.convex_hull(bm, input=verts)
+            bm.to_mesh(me)
+            bm.clear()
+            bm.free()
+            
+            return obj_phys, obj_bbox
+
+        def cull_edges(obj, threshold=0.1, mode="xy"):
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+            # Calculate bounding box dimensions
+            bbox = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+            x_dim = max(v.x for v in bbox) - min(v.x for v in bbox)
+            y_dim = max(v.y for v in bbox) - min(v.y for v in bbox)
+            z_dim = max(v.z for v in bbox) - min(v.z for v in bbox)
+            min_edge_length = 0.9 * min(x_dim, y_dim, z_dim)
+
+            edges_to_delete = []
+
+            if mode == "xy":
+                for edge in bm.edges:
+                    vert1, vert2 = edge.verts
+                    vertical_length = abs(vert1.co.z - vert2.co.z)
+                    if vertical_length > threshold:
+                        edges_to_delete.append(edge)
+            
+            elif mode == "z":
+                # Delete all faces but keep the edges
+                bm.faces.ensure_lookup_table()
+                bmesh.ops.delete(bm, geom=bm.faces, context='FACES_ONLY')
+
+            edges_to_delete = list(set(edges_to_delete + [edge for edge in bm.edges if edge.calc_length() < min_edge_length]))
+
+            bmesh.ops.delete(bm, geom=edges_to_delete, context='EDGES')
+            
+            bm.to_mesh(obj.data)
+            bm.clear()
+            bm.free()
+
+        def auto_bisect(obj, cuts=4, mode="xy"):
+            # Ensure we are in object mode
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Calculate the object's world-aligned bounding box
+            world_bbox = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+            min_z = min(corner.z for corner in world_bbox)
+            max_z = max(corner.z for corner in world_bbox)
+            min_y = min(corner.y for corner in world_bbox)
+            max_y = max(corner.y for corner in world_bbox)
+
+            # Create a new BMesh to work on the object's mesh data
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+            bm.transform(obj.matrix_world)  # Apply the object's transformation matrix to the BMesh
+
+            # Simplify the mesh (optional step)
+            bmesh.ops.dissolve_limit(bm, angle_limit=0.0872665, use_dissolve_boundaries=False, verts=bm.verts, edges=bm.edges, delimit={'NORMAL'})
+
+            # Apply bisection based on mode
+            if mode == "xy":
+                step = (max_z - min_z) / (cuts + 1)
+                for i in range(1, cuts + 1):
+                    cut_z = min_z + step * i
+                    plane_co = mathutils.Vector((0, 0, cut_z))
+                    plane_no = mathutils.Vector((0, 0, 1))
+
+                    bmesh.ops.bisect_plane(
+                        bm,
+                        geom=bm.faces[:] + bm.edges[:] + bm.verts[:],
+                        plane_co=plane_co,
+                        plane_no=plane_no,
+                        clear_inner=False,
+                        clear_outer=False,
+                    )
+
+            elif mode == "z":
+                step = (max_y - min_y) / (cuts + 1)
+                for i in range(1, cuts + 1):
+                    cut_y = min_y + step * i
+                    plane_co = mathutils.Vector((0, cut_y, 0))
+                    plane_no = mathutils.Vector((0, 1, 0))
+
+                    bmesh.ops.bisect_plane(
+                        bm,
+                        geom=bm.faces[:] + bm.edges[:] + bm.verts[:],
+                        plane_co=plane_co,
+                        plane_no=plane_no,
+                        clear_inner=False,
+                        clear_outer=False,
+                    )
+
+            # Convert the BMesh back to a mesh, counter-transform to local space
+            bm.transform(obj.matrix_world.inverted())
+            bm.to_mesh(obj.data)
+            bm.clear()
+            bm.free()
+            obj.data.update()
+
+        def cull_boundaries(obj, mode="xy"):
+            bpy.ops.object.mode_set(mode='OBJECT')
+            obj.select_set(True)
+            obj.hide_set(False)
+            bpy.ops.object.mode_set(mode='EDIT')
+
+            # Create a BMesh representation
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.faces.ensure_lookup_table()
+
+            top_face = None
+            bottom_face = None
+            max_z = float('-inf')
+            min_z = float('inf')
+
+            front_face = None
+            back_face = None
+            max_y = float('-inf')
+            min_y = float('inf')
+            
+            if mode == "xy":
+                for face in bm.faces:
+                    face_z = sum([v.co.z for v in face.verts]) / len(face.verts)
+                    if face_z > max_z:
+                        max_z = face_z
+                        top_face = face
+                    if face_z < min_z:
+                        min_z = face_z
+                        bottom_face = face
+            elif mode == "z":
+                for face in bm.faces:
+                    face_y = sum([v.co.y for v in face.verts]) / len(face.verts)
+                    if face_y > max_y:
+                        max_y = face_y
+                        front_face = face
+                    if face_y < min_y:
+                        min_y = face_y
+                        back_face = face
+
+            if mode == "xy":
+                if top_face == bottom_face and top_face:
+                    bmesh.ops.delete(bm, geom=[top_face], context='FACES')
+                elif top_face and bottom_face:
+                    bmesh.ops.delete(bm, geom=[top_face, bottom_face], context='FACES')
+            elif mode == "z":
+                if front_face == back_face and front_face:
+                    bmesh.ops.delete(bm, geom=[front_face], context='FACES')
+                elif front_face and back_face:
+                    bmesh.ops.delete(bm, geom=[front_face, back_face], context='FACES')
+
+            # Update the mesh
+            bmesh.update_edit_mesh(obj.data)
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        def get_modified_dimensions(obj):
+            # Get the evaluated object which considers modifiers, constraints, etc.
+            depsgraph = bpy.context.evaluated_depsgraph_get()  # Get the dependency graph
+            evaluated_obj = obj.evaluated_get(depsgraph)  # Get the evaluated version of the object
+
+            # Calculate dimensions from the temporary mesh
+            dimensions = obj.dimensions
+
+            # Clean up the temporary mesh data block
+            evaluated_obj.to_mesh_clear()
+
+            return mathutils.Vector((dimensions.x, dimensions.y))
+
+        def fill_bbox(obj_phys, obj_bbox):
+            bpy.ops.object.mode_set(mode='OBJECT')
+            obj_phys.select_set(False)
+            obj_phys.hide_set(True)
+            obj_bbox.select_set(True)
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='EDGE')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.edge_face_add()
+            bpy.ops.mesh.dissolve_faces()
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            obj_phys.hide_set(False)
+
+        def pre_clean(obj_phys, obj_bbox):
+            bpy.ops.object.mode_set(mode='OBJECT')
+            obj_phys.select_set(True)
+            obj_phys.hide_set(False)
+            obj_bbox.select_set(False)
+            obj_bbox.hide_set(True)
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.reveal()
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.remove_doubles(threshold=merge_distance)
+            bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+            if bpy.context.scene.SrcEngCollProperties.Dissolve:
+                bpy.ops.mesh.tris_convert_to_quads(
+                    seam=True, sharp=True, materials=True)
+                bpy.ops.mesh.dissolve_limited(
+                    angle_limit=0.0872665, delimit={'NORMAL'})
+            bpy.ops.mesh.decimate(
+                ratio=bpy.context.scene.SrcEngCollProperties.Decimate_Ratio)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            obj_phys.select_set(False)
+            obj_bbox.select_set(True)
+            obj_bbox.hide_set(False)
+
+        def solidify_and_bool(obj_phys, obj_bbox, mode="xy"):
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            obj_phys.select_set(False)
+            obj_bbox.select_set(True)
+            bpy.context.view_layer.objects.active = obj_bbox
+            solidify_modifier = obj_bbox.modifiers.new(name="BisectSolidify", type='SOLIDIFY')
+            solidify_modifier.thickness = obj_bbox.dimensions.z * gap_width
+            with bpy.context.temp_override(object=obj_bbox):
+                bpy.ops.object.modifier_apply(modifier="BisectSolidify")
+            force_convex([obj_bbox])
+
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='FACE')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
+            if mode == "xy":
+                bpy.ops.transform.resize(value=(1.35, 1.35, 1))
+            elif mode == "z":
+                bpy.ops.transform.resize(value=(1, 1, 1.35))
+                
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            set_origin(obj.location)
+
+
+            obj_bbox.select_set(False)
+            obj_phys.hide_set(False)
+            obj_phys.select_set(True)
+            bpy.context.view_layer.objects.active = obj_phys
+
+            phys_dimensions = mathutils.Vector((obj_phys.dimensions.x, obj_phys.dimensions.y))
+            bool_modifier = obj_phys.modifiers.new(name="BisectBoolean", type='BOOLEAN')
+            bool_modifier.object = obj_bbox
+            bool_modifier.solver = 'FAST'
+            bool_dimensions = get_modified_dimensions(obj_phys)
+
+            # Compare the dimensions with boolean modifier ENABLED, to check if the boolean modifier has unwanted artifacts
+            if bool_dimensions != phys_dimensions:
+                print("\nSetting boolean solver to EXACT mode due to dimensions warning\n")
+                bool_modifier.solver = 'EXACT'
+
+            with bpy.context.temp_override(object=obj_phys):
+                bpy.ops.object.modifier_apply(modifier="BisectBoolean")
+
+            # Some cleanup on the boolean'd result
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='FACE')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.hide(unselected=False)
+            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.split()
+            bpy.ops.mesh.delete(type='VERT')
+            bpy.ops.mesh.reveal()
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            bpy.data.objects.remove(obj_bbox)
+            total_hull_count = force_convex([obj_phys])
+            return total_hull_count
+
+        if len(objs) >= 1:
+            for obj in objs:
+                obj.select_set(False)
+
+            total_hull_count = 0
+
+            for obj in objs:
+
+                bpy.ops.object.select_all(action='DESELECT')
+
+                root_collection = None
+                if 'Collision Models' in bpy.data.collections.keys():
+                    root_collection = bpy.data.collections['Collision Models']
+                else:
+                    root_collection = bpy.data.collections.new("Collision Models")
+                    bpy.context.scene.collection.children.link(root_collection)
+                original_collection = bpy.context.collection
+
+                obj_collections = [
+                    c for c in bpy.data.collections if obj.name in c.objects.keys()]
+
+                obj_phys = None
+                collection_phys = None
+
+                bpy.ops.object.mode_set(mode="OBJECT")
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+
+                if (obj.name + "_phys") in bpy.data.objects.keys():
+                    bpy.data.objects.remove(bpy.data.objects[obj.name + "_phys"])
+
+                obj_phys, obj_bbox = gen_bisect_setup(obj)
+
+                if slice_mode == 'xy':
+                    auto_bisect(obj_bbox, cuts=cuts, mode="xy")
+                    cull_edges(obj_bbox, threshold=0.1, mode="xy")
+                    fill_bbox(obj_phys, obj_bbox)
+                    pre_clean(obj_phys, obj_bbox)
+                    cull_boundaries(obj_bbox, mode="xy")
+                    total_hull_count += solidify_and_bool(obj_phys, obj_bbox, mode="xy")
+                elif slice_mode == 'z':
+                    auto_bisect(obj_bbox, cuts=cuts, mode="z")
+                    cull_edges(obj_bbox, threshold=0.1, mode="z")
+                    fill_bbox(obj_phys, obj_bbox)
+                    pre_clean(obj_phys, obj_bbox)
+                    cull_boundaries(obj_bbox, mode="z")
+                    total_hull_count += solidify_and_bool(obj_phys, obj_bbox, mode="z")
+
+                # Begin finalizing
+                bpy.ops.object.shade_smooth()
+                obj.hide_set(True)
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+                set_origin(obj.location)
+
+                
+                # Setup collection
+                if (obj_phys.name.lower()) in bpy.data.collections.keys():
+                    collection_phys = bpy.data.collections[obj_phys.name.lower()]
+                else:
+                    collection_phys = bpy.data.collections.new(obj_phys.name)
+                    root_collection.children.link(collection_phys)
+
+                if obj_phys.name not in collection_phys.objects.keys():
+                    collection_phys.objects.link(obj_phys)
+
+                # Unlink the new collision model from other collections
+                original_collection.objects.unlink(obj_phys)
+                for c in obj_collections:
+                    if obj_phys.name in c.objects.keys():
+                        c.objects.unlink(obj_phys)
+                if obj_phys.name in bpy.context.scene.collection.objects.keys():
+                    bpy.context.scene.collection.objects.unlink(obj_phys)
+                
+                # Restore original origin point
+                new_origin = tuple(obj.location)
+                bpy.context.scene.cursor.location = new_origin
+                bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+
+                # Remove non-manifold and degenerates
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(
+                    use_extend=False, use_expand=False, type='VERT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.mesh.select_non_manifold()
+                bpy.ops.mesh.select_linked(delimit=set())
+                bpy.ops.mesh.delete(type='VERT')
+                
+                # Cleanup materials
+                bpy.ops.object.mode_set(mode='OBJECT')
+                obj_phys.data.materials.clear()
+                if "phys" not in bpy.data.materials.keys():
+                    bpy.data.materials.new("phys")
+                obj_phys.data.materials.append(
+                    bpy.data.materials["phys"])
+                obj_phys.data.materials[0].diffuse_color = (
+                    1, 0, 0.78315, 1)
+                
+                obj_results.append(obj_phys.name)
+                obj.select_set(False)
+
+            display_msg_box(
+                "Generated collision mesh(es) with total hull count of " + str(total_hull_count) + ".", "Info", "INFO")
+
+        for obj in obj_results:
+            bpy.data.objects[obj].select_set(True)
+
+        bpy.context.preferences.edit.use_global_undo = original_undo
+
+        return {'FINISHED'}
+
 
 # Split Up Collision Mesh operator
 
@@ -1114,7 +1597,6 @@ class SplitUpSrcCollision(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -1236,8 +1718,6 @@ class SplitUpSrcCollision(bpy.types.Operator):
         total_part_count = str(total_part_count)
         display_msg_box(
             "Split up collision mesh into " + total_part_count + " part(s).", "Info", "INFO")
-        print("Split up collision mesh into " +
-                total_part_count + " part(s).")
 
         bpy.context.preferences.edit.use_global_undo = original_undo
 
@@ -1257,7 +1737,6 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -1286,6 +1765,7 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
                 bpy.ops.mesh.select_mode(type='FACE')
                 bpy.ops.mesh.select_all(action='DESELECT')
                 bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
                 bpy.ops.object.transform_apply(
                     location=True, rotation=True, scale=True)
 
@@ -1300,7 +1780,6 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
                 hulls = [hull for hull in bmesh_get_hulls(
                     bm, verts=bm.verts)]
-                print("Hulls to process:", len(hulls))
                 hull_bm_list = list()
 
                 i = 0
@@ -1480,8 +1959,6 @@ class Cleanup_MergeAdjacentSimilars(bpy.types.Operator):
 
             display_msg_box(
                 "Processed original " + str(initial_hull_count) + " hull(s).\nMerged " + str(merged_count) + " total hull(s).", "Info", "INFO")
-            print(
-                "Processed original " + str(initial_hull_count) + " hull(s).\nMerged " + str(merged_count) + " total hull(s).")
 
         bpy.context.preferences.edit.use_global_undo = original_undo
 
@@ -1500,7 +1977,6 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -1549,7 +2025,6 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
                 bm.from_mesh(me)
                 hulls = [hull for hull in bmesh_get_hulls(
                     bm, verts=bm.verts)]
-                print("Hulls to process:", len(hulls))
 
                 hulls_to_check = list()
 
@@ -1616,8 +2091,6 @@ class Cleanup_RemoveThinHulls(bpy.types.Operator):
                 amount_removed += len(hulls_to_check) - total_hull_count
             display_msg_box(
                 "Removed " + str(amount_removed) + " hull(s)", "Info", "INFO")
-            print(
-                "Removed " + str(amount_removed) + " hull(s)")
 
         bpy.context.preferences.edit.use_global_undo = original_undo
 
@@ -1637,7 +2110,6 @@ class Cleanup_ForceConvex(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
         
@@ -1662,7 +2134,6 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one valid mesh object must be selected.", "Info", "INFO")
-            print("At least one valid mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -1769,7 +2240,6 @@ class Cleanup_RemoveInsideHulls(bpy.types.Operator):
 
             display_msg_box(
                 "Removed " + str(amount_to_remove) + " hull(s).", "Info", "INFO")
-            print("Removed " + str(amount_to_remove) + " hull(s).")
 
         bpy.context.preferences.edit.use_global_undo = original_undo
 
@@ -1809,6 +2279,7 @@ class GenerateSourceQC(bpy.types.Operator):
             else:
                 display_msg_box(
                     "There are no collision models in the 'Collision Models' collection. Place your collision models there first", "Error", "ERROR")
+                
         else:
             display_msg_box(
                 "There is no 'Collision Models' collection. Please create one with that exact name, and then place your collision models inside it", "Error", "ERROR")
@@ -1854,7 +2325,6 @@ class CopyQCOverrides(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
         
@@ -1889,7 +2359,6 @@ class ClearQCOverrides(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -2130,7 +2599,6 @@ class ExportVMF(bpy.types.Operator):
         if objs == False:
             display_msg_box(
                 "At least one mesh object must be selected.", "Info", "INFO")
-            print("At least one mesh object must be selected.")
 
             return {'FINISHED'}
 
@@ -2265,11 +2733,9 @@ class ExportVMF(bpy.types.Operator):
                 except Exception as e:
                     display_msg_box(
                         f"Couldn't write VMF due to following:\n{e}", "Info", "INFO")
-                    print(f"ERROR: Couldn't write VMF due to following:\n{e}")
 
                     return {'FINISHED'}
 
-            print(f"[VMF Export] {total_solids_count} solids exported successfully to VMF folder:\n{vmf_export_dir}\n\n")
             display_msg_box(
                 f"{total_solids_count} solids exported successfully to VMF folder:\n{vmf_export_dir}", "Info", "INFO")
 
@@ -2300,8 +2766,6 @@ class CleanupCollection(bpy.types.Operator):
 
             display_msg_box("Removed " + str(removed_count) +
                             " collection(s)", "Info", "INFO")
-            print("Removed  " + str(removed_count) +
-                " collection(s)")
         else:
             display_msg_box(
                 "There is no 'Collision Models' collection to clean up", "Info", "INFO")
@@ -2314,7 +2778,7 @@ class ConvexCut(bpy.types.Operator):
     bl_label = "Convex Cut"
     bl_options = {'REGISTER', 'UNDO'}
 
-    initial_vertex_count: IntProperty()
+    initial_vertex_count: bpy.props.IntProperty()
 
     def invoke(self, context, event):
         if context.active_object:
@@ -2357,9 +2821,10 @@ class ConvexCut(bpy.types.Operator):
 
 
 ops = (
-    GenerateSrcCollision,
-    GenerateUVBasedCollision,
-    FractGenSrcCollision,
+    GenerateFromFaces,
+    GenerateFromUVMap,
+    GenerateFromFracture,
+    GenerateFromBisection,
     SplitUpSrcCollision,
     GenerateSourceQC,
     CopyQCOverrides,
@@ -2386,7 +2851,7 @@ def menu_func_mesh(self, context):
 # MATERIALS PANEL
 
 
-class SrcEngCollGen_Panel(bpy.types.Panel):
+class MESH_PT_src_eng_coll_gen(bpy.types.Panel):
     bl_label = 'Source Engine Collision Tools'
     bl_idname = "MESH_PT_src_eng_coll_gen"
     bl_space_type = 'PROPERTIES'
@@ -2402,8 +2867,17 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.enabled = True
 
+
+class SrcEngCollGen_SubPanel_Generate(bpy.types.Panel):
+    bl_parent_id = "MESH_PT_src_eng_coll_gen"
+    bl_label = "Generate"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'object'
+    
+    def draw(self, context):
+        layout = self.layout
         rowGen = layout.row()
         row1 = layout.row()
         row2 = layout.row()
@@ -2414,12 +2888,8 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         layout.separator()
 
         rowFractGen = layout.row()
-
-        rowCleanup = layout.row()
-        layout.separator()
-
-        rowQC = layout.row()
-        layout.separator()
+        rowSeparator1= layout.row()
+        rowBisectGen = layout.row()
 
         rowGen.operator("object.src_eng_recc_settings")       
         row1.prop(bpy.context.scene.SrcEngCollProperties, "Decimate_Ratio")
@@ -2427,28 +2897,48 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         row3.prop(bpy.context.scene.SrcEngCollProperties, "Merge_Distance")
         row4.prop(bpy.context.scene.SrcEngCollProperties, "Dissolve")
         row4.prop(bpy.context.scene.SrcEngCollProperties, "Post_Merge")
-        row5.operator("object.src_eng_collision")
-        row6.operator("object.src_eng_uv_collision")
+        row5.operator("object.src_eng_gen_faces")
+        row6.operator("object.src_eng_gen_uvmap")
 
         # Fracture Generator UI
         boxFractGen = rowFractGen.box()
-        boxFractGen.label(text="Fracture Generator")
+        boxFractGen.label(text="Fracture")
         rowFractGen2 = boxFractGen.row()
         rowFractGen2.prop(bpy.context.scene.SrcEngCollProperties, "Fracture_Target")
         rowFractGen3 = boxFractGen.row()
         rowFractGen3.prop(bpy.context.scene.SrcEngCollProperties, "Voxel_Resolution")
         rowFractGen4 = boxFractGen.row()
-        rowFractGen4.prop(bpy.context.scene.SrcEngCollProperties, "Gap_Width")
+        rowFractGen4.prop(bpy.context.scene.SrcEngCollProperties, "Fracture_Gap")
         rowFractGen5 = boxFractGen.row()
-        rowFractGen5.operator("object.src_eng_fract_collision")
+        rowFractGen5.operator("object.src_eng_gen_fracture")
+
+        boxBisectGen = rowBisectGen.box()
+        boxBisectGen.label(text="Bisection")
+        rowBisectGen1 = boxBisectGen.row()
+        rowBisectGen1.prop(bpy.context.scene.SrcEngCollProperties, "Bisections")
+        rowBisectGen1.prop(bpy.context.scene.SrcEngCollProperties, "Bisect_Gap")
+        rowBisectGen2 = boxBisectGen.row()
+        rowBisectGen2.prop(bpy.context.scene.SrcEngCollProperties, "Bisect_Mode")
+        rowBisectGen3 = boxBisectGen.row()
+        rowBisectGen3.operator("object.src_eng_gen_bisect")
+
+class SrcEngCollGen_SubPanel_Cleanup(bpy.types.Panel):
+    bl_parent_id = "MESH_PT_src_eng_coll_gen"
+    bl_label = "Cleanup"
+    bl_options = {"DEFAULT_CLOSED"}
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'object'
+    
+    def draw(self, context):
+        layout = self.layout
 
         # Cleanup UI
+        rowCleanup = layout.row()
         boxCleanup = rowCleanup.box()
-        boxCleanup.label(text="Clean Up Tools")
         rowCleanup1_Label = boxCleanup.row()
         rowCleanup1 = boxCleanup.row()
         rowCleanup2 = boxCleanup.row()
-        boxCleanup.separator()
         rowCleanup3_Label = boxCleanup.row()
         rowCleanup3 = boxCleanup.row()
         rowCleanup4 = boxCleanup.row()
@@ -2457,7 +2947,6 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowCleanup6 = boxCleanup.row()
         rowCleanup7 = boxCleanup.row()
         rowCleanup8 = boxCleanup.row()
-        boxCleanup.separator()
 
         rowCleanup1_Label.label(text="Similarity")
         rowCleanup1.prop(
@@ -2469,10 +2958,23 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
             bpy.context.scene.SrcEngCollProperties, "Thin_Threshold")
         rowCleanup4.operator("object.src_eng_cleanup_remove_thin_hulls")
         rowCleanup5_Label.label(text="Other")
-        rowCleanup5.operator("object.src_eng_split")
         rowCleanup6.operator("object.src_eng_cleanup_force_convex")
         rowCleanup7.operator("object.src_eng_cleanup_remove_inside")
+        rowCleanup5.operator("object.src_eng_split")
         rowCleanup8.operator("object.src_eng_cleanup_collection")
+
+class SrcEngCollGen_SubPanel_Compile(bpy.types.Panel):
+    bl_parent_id = "MESH_PT_src_eng_coll_gen"
+    bl_label = "Compile"
+    bl_options = {"DEFAULT_CLOSED"}
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'object'
+    
+    def draw(self, context):
+        layout = self.layout
+
+        rowQC = layout.row()
 
         # Compile / QC UI
         boxQC = rowQC.box()
@@ -2513,16 +3015,20 @@ class SrcEngCollGen_Panel(bpy.types.Panel):
         rowVMF1.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Export_Dir")
         rowVMF2.prop(bpy.context.scene.SrcEngCollProperties, "VMF_Texture")
         rowVMF3.operator("object.src_eng_vmf_export")
-
+        
 # End of classes
 
 
 classes = (
-    SrcEngCollGen_Panel,
+    MESH_PT_src_eng_coll_gen,
+    SrcEngCollGen_SubPanel_Generate,
+    SrcEngCollGen_SubPanel_Cleanup,
+    SrcEngCollGen_SubPanel_Compile,
     SrcEngCollProperties,
-    GenerateSrcCollision,
-    GenerateUVBasedCollision,
-    FractGenSrcCollision,
+    GenerateFromFaces,
+    GenerateFromUVMap,
+    GenerateFromFracture,
+    GenerateFromBisection,
     SplitUpSrcCollision,
     GenerateSourceQC,
     CopyQCOverrides,
