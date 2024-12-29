@@ -47,7 +47,7 @@ Note that all of the "Generate" features support the Decimate Ratio setting, to 
 
 ## Previews ##
 ### Interface ###
-![image](https://github.com/theanine3D/source-engine-collision-tools/assets/88953117/65c5a386-fb52-4128-889c-de40d2deb15d)
+![image](https://github.com/user-attachments/assets/cc9d4aad-07d8-46cd-b445-739a42e1e504)
 ### Generate Collision by Bisection ###
 ![generate-by-bisection](https://github.com/user-attachments/assets/598a1280-7f10-4b24-ab31-533ad00c6d88)
 ### Generate Collision by Fracture ###
